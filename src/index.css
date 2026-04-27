@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+/* Agregamos esto para quitar el azul feo de los links que viste en tu captura */
+@layer base {
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}
