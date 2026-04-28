@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
   PlusIcon, 
   PencilIcon, 
@@ -11,9 +12,10 @@ import {
 // IMPORTACIONES OBLIGATORIAS SEGÚN REGLAS
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
-import { MenuService } from "../../Services/Api";
 
-// --- Estilos de Inputs Consistentes ---
+const API_URL = '/api/menu';
+
+// --- Estilos de Inputs Consistentes (Glassmorphism) ---
 const inputClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all";
 const labelClass = "block text-sm font-bold text-slate-300 mb-1.5 ml-1";
 
@@ -33,26 +35,32 @@ export default function MenuManager() {
     categoria: '',
     precio: '',
     ingredientes: '',
-    tiempoPreparacion: '',
+    tiempoPreparacion: '', // Frontend usa camelCase
     disponible: true,
   };
 
   const [formData, setFormData] = useState(initialFormState);
 
   useEffect(() => {
-    fetchCategories();
     fetchMenuItems();
+    fetchCategories();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCategory]);
 
-  // --- Lógica de Conexión con Backend (API) ---
+  // --- Lógica de Conexión con Backend (API Directa) ---
+  
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
-      const filters = filterCategory ? { categoria: filterCategory } : {};
-      const data = await MenuService.getAll(filters);
-      setItems(data);
+      setError(''); // Limpiar errores previos
+      const params = filterCategory ? { params: { categoria: filterCategory } } : {};
+      
+      const response = await axios.get(API_URL, params);
+      setItems(response.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al cargar el menú');
+      console.error("Error detallado fetching menu:", err);
+      const msg = err.response?.data?.error || err.message || 'Error al cargar el menú';
+      setError(`Error ${err.response?.status || 500}: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -60,38 +68,62 @@ export default function MenuManager() {
 
   const fetchCategories = async () => {
     try {
-      const data = await MenuService.getCategories();
-      setCategories(data);
+      const response = await axios.get(`${API_URL}/categories`);
+      setCategories(response.data);
     } catch (err) {
-      console.error("Error cargando categorías:", err);
+      console.warn("No se pudieron cargar categorías (quizás la ruta no existe aún):", err.message);
+      setCategories([]);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      setError('');
+      
+      // 🛠 CORRECCIÓN CRÍTICA: Adaptar datos del Frontend a la DB
+      const payload = {
+        ...formData,
+        // Convertir camelCase a snake_case para la DB
+        tiempo_preparacion: formData.tiempoPreparacion === '' ? null : Number(formData.tiempoPreparacion),
+        precio: Number(formData.precio)
+      };
+      
+      // Eliminar la propiedad antigua para no confundir al backend
+      delete payload.tiempoPreparacion;
+
       if (editingId) {
-        await MenuService.update(editingId, formData);
+        await axios.put(`${API_URL}/${editingId}`, payload);
         setSuccess('Plato actualizado correctamente');
       } else {
-        await MenuService.create(formData);
+        const res = await axios.post(API_URL, payload);
+        console.log("Plato creado:", res.data);
         setSuccess('Plato creado exitosamente');
       }
+      
       handleCloseForm();
-      fetchMenuItems();
+      await fetchMenuItems(); // Recargar lista inmediatamente
+      
+      // Auto-ocultar éxito
+      setTimeout(() => setSuccess(''), 4000);
+      
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al guardar el plato');
+      console.error("Error al guardar:", err);
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Error desconocido al guardar';
+      setError(`Fallo al guardar: ${errorMsg}`);
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('¿Estás seguro de eliminar este plato? Esta acción no se puede deshacer.')) {
+    if (window.confirm('¿Estás seguro de eliminar este plato?')) {
       try {
-        await MenuService.delete(id);
+        await axios.delete(`${API_URL}/${id}`);
         setSuccess('Plato eliminado');
         fetchMenuItems();
+        setTimeout(() => setSuccess(''), 3000);
       } catch (err) {
         setError(err.response?.data?.error || 'Error al eliminar');
+        setTimeout(() => setError(''), 3000);
       }
     }
   };
@@ -100,16 +132,19 @@ export default function MenuManager() {
     setFormData({
       ...item,
       precio: item.precio.toString(),
+      // Asegurar que leemos la columna correcta de la DB
       tiempoPreparacion: item.tiempo_preparacion ? item.tiempo_preparacion.toString() : ''
     });
     setEditingId(item.id);
     setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingId(null);
     setFormData(initialFormState);
+    setError('');
   };
 
   const handleInputChange = (e) => {
@@ -132,14 +167,14 @@ export default function MenuManager() {
           <p className="text-slate-400 mt-2 text-lg">Administra tus platos y categorías con estilo premium.</p>
         </div>
         <GlassButton onClick={() => setShowForm(true)} variant="primary">
-          <PlusIcon className="w-5 h-5" />
+          <PlusIcon className="w-5 h-5 mr-2" />
           Nuevo Plato
         </GlassButton>
       </div>
 
       {/* --- Alertas --- */}
       {error && (
-        <GlassCard className="mb-6 border-l-4 border-l-red-500 bg-red-900/20">
+        <GlassCard className="mb-6 border-l-4 border-l-red-500 bg-red-900/20 backdrop-blur-md animate-in fade-in slide-in-from-top-4">
           <div className="p-4 flex justify-between items-center">
             <div className="flex items-center gap-3 text-red-200">
               <XMarkIcon className="w-6 h-6" /> 
@@ -150,7 +185,7 @@ export default function MenuManager() {
         </GlassCard>
       )}
       {success && (
-        <GlassCard className="mb-6 border-l-4 border-l-emerald-500 bg-emerald-900/20">
+        <GlassCard className="mb-6 border-l-4 border-l-emerald-500 bg-emerald-900/20 backdrop-blur-md animate-in fade-in slide-in-from-top-4">
           <div className="p-4 flex justify-between items-center">
             <div className="flex items-center gap-3 text-emerald-200">
               <CheckIcon className="w-6 h-6" /> 
@@ -162,7 +197,7 @@ export default function MenuManager() {
       )}
 
       {/* --- Filtros --- */}
-      <GlassCard className="mb-8 p-4 flex flex-col md:flex-row items-center gap-4">
+      <GlassCard className="mb-8 p-4 flex flex-col md:flex-row items-center gap-4 backdrop-blur-xl border-white/10">
         <label className="text-sm font-bold text-slate-300 uppercase tracking-wider">
           Filtrar por categoría:
         </label>
@@ -180,7 +215,7 @@ export default function MenuManager() {
 
       {/* --- Formulario (Modal Inline) --- */}
       {showForm && (
-        <GlassCard gradient="from-orange-500 to-amber-500" className="mb-8 p-8 animate-in fade-in slide-in-from-top-8 duration-300">
+        <GlassCard className="mb-8 p-8 animate-in fade-in slide-in-from-top-8 duration-300 border-white/10 bg-slate-800/40 shadow-2xl shadow-orange-500/10">
           <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
             <h2 className="text-2xl font-bold text-white">
               {editingId ? 'Editar Plato' : 'Crear Nuevo Plato'}
@@ -273,12 +308,13 @@ export default function MenuManager() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {items.length === 0 ? (
-            <GlassCard className="col-span-full text-center py-20 border-dashed">
+            <GlassCard className="col-span-full text-center py-20 border-dashed border-white/10">
               <p className="text-slate-400 text-lg">No se encontraron platos.</p>
+              {!filterCategory && <p className="text-sm text-slate-500 mt-2">¡Agrega uno nuevo para comenzar!</p>}
             </GlassCard>
           ) : (
             items.map((item) => (
-              <GlassCard key={item.id} className="p-6 flex flex-col h-full group">
+              <GlassCard key={item.id} className="p-6 flex flex-col h-full group hover:-translate-y-1 transition-transform duration-300 border-white/10 bg-slate-800/30">
                 <div className="flex justify-between items-start mb-4">
                   <span className="text-xs font-black text-orange-400 bg-orange-500/10 px-3 py-1 rounded-full uppercase tracking-wider border border-orange-500/20">
                     {item.categoria}
@@ -327,4 +363,4 @@ export default function MenuManager() {
       )}
     </div>
   );
-}
+};
