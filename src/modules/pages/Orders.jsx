@@ -1,421 +1,383 @@
-// File: Orders.jsx
-import { useEffect, useState } from "react";
-import { OrderService, TableService, MenuService, SalesService } from "../../Services/Api";
-import PaymentModal from "../../components/PaymentModal"; 
-import {
-  FiPlus, FiTrash2, FiCheckCircle, FiZap,
-  FiPackage, FiAlertCircle, FiShoppingBag,
-  FiMinus, FiPlus as FiPlusIcon, FiUser, FiMapPin,
-  FiClock, FiDollarSign, FiEdit, FiX
-} from "react-icons/fi";
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { 
+  PlusIcon, 
+  TrashIcon, 
+  XMarkIcon, 
+  ShoppingBagIcon, 
+  CurrencyDollarIcon, 
+  CheckCircleIcon,
+  MagnifyingGlassIcon,
+  ClockIcon
+} from '@heroicons/react/24/outline';
 
-// --- Componentes Inline (Para mantener este archivo autocontenido, 
-// pero idealmente estarían en tu carpeta components) ---
+// IMPORTACIONES OBLIGATORIAS
+import GlassCard from "../../components/GlassCard";
+import GlassButton from "../../components/GlassButton";
 
-const GlassCard = ({ children, className = "", gradient = null }) => (
-  <div className={`
-    relative overflow-hidden 
-    bg-slate-800/40 backdrop-blur-xl 
-    border border-white/10 
-    rounded-3xl 
-    transition-all duration-300 
-    hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl
-    ${className}
-  `}>
-    {gradient && (
-      <div className={`absolute -right-6 -top-6 w-32 h-32 bg-gradient-to-br ${gradient} opacity-20 blur-3xl rounded-full`} />
-    )}
-    <div className="relative z-10">
-      {children}
-    </div>
-  </div>
-);
+const API_URL = '/api/orders';
+const MENU_URL = '/api/menu';
+const TABLES_URL = '/api/tables';
 
-const GlassButton = ({ children, variant = "primary", className = "", ...props }) => {
-  const variants = {
-    primary: "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30",
-    secondary: "bg-white/10 text-white border border-white/10 hover:bg-white/20",
-    danger: "bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/30",
-    success: "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/30",
-  };
-  
-  return (
-    <button 
-      className={`
-        font-bold py-3 px-6 rounded-2xl 
-        hover:scale-105 active:scale-95 
-        transition-all duration-300 flex items-center justify-center gap-2
-        ${variants[variant]}
-        ${className}
-      `}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-};
-
-export default function Orders() {
-  const [orders, setOrders] = useState([]);
-  const [mesas, setMesas] = useState([]);
-  const [meseros, setMeseros] = useState([]);
+export default function OrdersPOS() {
   const [menuItems, setMenuItems] = useState([]);
-  const [menuCategories, setMenuCategories] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('todas');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // Estados para el proceso de cobro
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedSale, setSelectedSale] = useState(null);
-
-  const [orderForm, setOrderForm] = useState({
-    mesaId: "",
-    meseroId: "",
-    items: [],
-    prioridad: "normal"
+  // Estado para el formulario de checkout
+  const [checkoutData, setCheckoutData] = useState({
+    mesa_id: '',
+    cliente: '',
+    notas: ''
   });
 
-  const formatCurrency = (amount) => `$${Number(amount).toFixed(2)}`;
+  useEffect(() => {
+    initData();
+  }, []);
 
-  const getOrderTotal = (items) => {
-    return items.reduce((total, item) => total + (item.precio_unitario * item.cantidad), 0);
-  };
-
-  const loadData = async () => {
+  const initData = async () => {
     try {
       setLoading(true);
-      setError(null);
-
-      const [ordersData, mesasData, meserosData, menuData, categoriesData] = await Promise.all([
-        OrderService.getAll(),
-        TableService.getAll(),
-        TableService.getWaiters(),
-        MenuService.getItems(),
-        MenuService.getCategories()
+      // Cargamos todo en paralelo
+      const [menuRes, tablesRes, ordersRes] = await Promise.all([
+        axios.get(MENU_URL).catch(() => ({ data: [] })),
+        axios.get(TABLES_URL).catch(() => ({ data: [] })),
+        axios.get(API_URL).catch(() => ({ data: [] }))
       ]);
 
-      setOrders(Array.isArray(ordersData) ? ordersData : (ordersData?.orders || []));
-      setMesas(Array.isArray(mesasData) ? mesasData : (mesasData?.mesas || []));
-      setMeseros(Array.isArray(meserosData) ? meserosData : (meserosData?.meseros || []));
-      setMenuItems(Array.isArray(menuData) ? menuData : []);
-      setMenuCategories(Array.isArray(categoriesData) ? categoriesData.map(c => c.categoria) : []);
-
+      setMenuItems(menuRes.data || []);
+      setTables(tablesRes.data || []);
+      setOrders(ordersRes.data || []);
     } catch (err) {
-      console.error("❌ LOAD DATA ERROR:", err);
-      setError("No se pudieron cargar los datos.");
+      console.error("Error cargando datos iniciales:", err);
+      setError("No se pudieron cargar los datos del sistema.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const handleAddItemFromMenu = (item) => {
-    const existingItemIndex = orderForm.items.findIndex(i => i.menu_item_id === item.id);
-
-    if (existingItemIndex > -1) {
-      const newItems = [...orderForm.items];
-      newItems[existingItemIndex].cantidad += 1;
-      newItems[existingItemIndex].subtotal = newItems[existingItemIndex].cantidad * item.precio;
-      setOrderForm(prev => ({ ...prev, items: newItems }));
-    } else {
-      const newItem = {
-        menu_item_id: item.id,
-        nombre: item.nombre,
-        precio_unitario: item.precio,
-        cantidad: 1,
-        subtotal: item.precio,
-        notas: ""
-      };
-      setOrderForm(prev => ({ ...prev, items: [...prev.items, newItem] }));
-    }
+  // --- Lógica del Carrito ---
+  const addToCart = (item) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) {
+        return prev.map(i => i.id === item.id ? { ...i, cantidad: i.cantidad + 1 } : i);
+      }
+      return [...prev, { ...item, cantidad: 1 }];
+    });
   };
 
-  const handleRemoveItem = (index) => {
-    setOrderForm(prev => ({
-      ...prev,
-      items: prev.items.filter((_, i) => i !== index)
+  const removeFromCart = (itemId) => {
+    setCart(prev => prev.filter(i => i.id !== itemId));
+  };
+
+  const updateQuantity = (itemId, delta) => {
+    setCart(prev => prev.map(item => {
+      if (item.id === itemId) {
+        const newQty = Math.max(1, item.cantidad + delta);
+        return { ...item, cantidad: newQty };
+      }
+      return item;
     }));
   };
 
+  const cartTotal = cart.reduce((sum, item) => sum + (Number(item.precio) * item.cantidad), 0);
+
+  // --- Filtrado de Menú ---
+  const filteredItems = menuItems.filter(item => {
+    const matchesSearch = item.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory ? item.categoria === selectedCategory : true;
+    return matchesSearch && matchesCategory;
+  });
+
+  const categories = [...new Set(menuItems.map(item => item.categoria))].filter(Boolean);
+
+  // --- Crear Pedido ---
   const handleCreateOrder = async () => {
-    if (orderForm.items.length === 0) {
-      setError("Debe seleccionar al menos un plato del menú");
+    if (cart.length === 0) {
+      setError("El carrito está vacío");
       return;
     }
-    try {
-      setActionLoading(true);
-      await OrderService.create({
-        mesaId: orderForm.mesaId || null,
-        meseroId: orderForm.meseroId || null,
-        items: orderForm.items,
-        estado: 'pendiente',
-        prioridad: orderForm.prioridad
-      });
-      setOrderForm({ mesaId: "", meseroId: "", items: [], prioridad: "normal" });
-      setShowForm(false);
-      await loadData();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setActionLoading(false);
-    }
-  };
 
-  // LÓGICA PARA COBRAR CUENTA
-  const handleCobrarCuenta = async (orderId) => {
     try {
-      setActionLoading(true);
-      setError(null);
-      const response = await SalesService.getSaleByOrderId(orderId);
-      
-      if (response.success) {
-        setSelectedSale(response.data);
-        setIsPaymentModalOpen(true);
+      // 1. Crear la orden cabecera
+      const orderPayload = {
+        mesa_id: checkoutData.mesa_id ? Number(checkoutData.mesa_id) : null,
+        mesero_id: 1, // TODO: Obtener del usuario logueado
+        total: cartTotal,
+        estado: 'abierto',
+        cliente: checkoutData.cliente || null
+      };
+
+      const orderResponse = await axios.post(API_URL, orderPayload);
+      const newOrderId = orderResponse.data.id;
+
+      // 2. Crear los items de la orden (Loop)
+      // Nota: En producción idealmente sería una transacción o un endpoint bulk
+      for (const item of cart) {
+        await axios.post('/api/order-items', {
+          order_id: newOrderId,
+          menu_item_id: item.id,
+          nombre: item.nombre,
+          precio_unitario: item.precio,
+          cantidad: item.cantidad,
+          subtotal: item.precio * item.cantidad,
+          estado: 'pendiente'
+        });
       }
+
+      setSuccess("Pedido creado exitosamente");
+      setCart([]);
+      setShowCheckout(false);
+      setCheckoutData({ mesa_id: '', cliente: '', notas: '' });
+      initData(); // Recargar lista
+      
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setActionLoading(false);
+      console.error("Error creando pedido:", err);
+      setError(err.response?.data?.error || "Error al crear el pedido. Revisa la consola.");
+      setTimeout(() => setError(''), 5000);
     }
   };
 
-  const filteredMenuItems = selectedCategory === 'todas'
-    ? menuItems
-    : menuItems.filter(item => item.categoria === selectedCategory);
-
-  // Estilos reutilizables para inputs en modo oscuro
-  const inputStyle = "w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all";
-  const labelStyle = "block text-xs font-bold text-slate-400 uppercase mb-1 tracking-wider";
-
-  if (loading) return (
-    <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
-      <FiPackage className="h-12 w-12 animate-spin text-orange-500" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <div className="text-orange-500 font-bold text-xl animate-pulse">Cargando sistema...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-6 md:p-8 font-sans">
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-4 md:p-6 font-sans flex flex-col lg:flex-row gap-6">
       
-      {/* Header */}
-      <div className="mb-10 flex flex-col md:flex-row justify-between items-end gap-4">
-        <div>
-          <h1 className="text-4xl font-black text-white tracking-tight drop-shadow-lg">Pedidos</h1>
-          <p className="text-slate-400 mt-2 text-lg">Gestión de comandas en tiempo real</p>
-        </div>
-        <GlassButton onClick={() => setShowForm(true)} variant="primary">
-          <FiPlus /> Nuevo Pedido
-        </GlassButton>
-      </div>
-
-      {/* Error Alert */}
-      {error && (
-        <GlassCard className="mb-6 border-red-500/30 bg-red-900/20">
-          <div className="p-4 flex items-center gap-3 text-red-200">
-            <FiAlertCircle className="text-red-500" /> 
-            <span>{error}</span>
-            <button onClick={() => setError(null)} className="ml-auto hover:text-white"><FiX /></button>
+      {/* --- COLUMNA IZQUIERDA: MENÚ --- */}
+      <div className="flex-1 flex flex-col h-[calc(100vh-2rem)] overflow-hidden">
+        {/* Header y Filtros */}
+        <GlassCard className="p-4 mb-4 shrink-0 border-white/10">
+          <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500 mb-4">
+            Punto de Venta
+          </h1>
+          
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <MagnifyingGlassIcon className="w-5 h-5 absolute left-3 top-3.5 text-slate-500" />
+              <input 
+                type="text" 
+                placeholder="Buscar plato..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-900/50 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-white focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all"
+              />
+            </div>
+            
+            <select 
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white focus:border-orange-500/50 outline-none cursor-pointer min-w-[150px]"
+            >
+              <option value="">Todas las categorías</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
           </div>
         </GlassCard>
-      )}
 
-      {/* Grid de Pedidos */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {orders.map((order) => (
-          <GlassCard key={order.id} className="p-6 flex flex-col h-full" gradient="from-orange-500 to-amber-500">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-xl font-black text-white tracking-tight">Pedido #{order.id}</h3>
-                <span className="text-xs text-slate-400 font-mono mt-1 block">
-                  {new Date(order.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </span>
+        {/* Grid de Productos */}
+        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
+            {filteredItems.length > 0 ? (
+              filteredItems.map(item => (
+                <GlassCard 
+                  key={item.id} 
+                  onClick={() => item.disponible && addToCart(item)}
+                  className={`p-4 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-orange-500/20 border-white/10 ${!item.disponible ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:border-orange-500/50'}`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-[10px] font-bold uppercase text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                      {item.categoria}
+                    </span>
+                    {!item.disponible && <span className="text-[10px] font-bold text-red-400">Agotado</span>}
+                  </div>
+                  <h3 className="font-bold text-white text-sm mb-1 line-clamp-2">{item.nombre}</h3>
+                  <p className="text-xs text-slate-400 mb-3 line-clamp-2 h-8">{item.descripcion}</p>
+                  <div className="flex justify-between items-center mt-auto">
+                    <span className="text-lg font-black text-white">${Number(item.precio).toFixed(2)}</span>
+                    {item.disponible && (
+                      <button className="w-8 h-8 rounded-full bg-orange-500 hover:bg-orange-600 flex items-center justify-center text-white transition-colors">
+                        <PlusIcon className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                </GlassCard>
+              ))
+            ) : (
+              <div className="col-span-full text-center py-10 text-slate-500">
+                No se encontraron productos
               </div>
-              <span className={`
-                px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border
-                ${order.estado === 'entregado' 
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' 
-                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}
-              `}>
-                {order.estado}
-              </span>
-            </div>
-
-            <div className="space-y-3 mb-6 text-sm text-slate-300 flex-1">
-              <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg">
-                <FiMapPin className="text-orange-400" /> 
-                <span>Mesa #{order.mesa_numero || 'N/A'}</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg">
-                <FiUser className="text-blue-400" /> 
-                <span>{order.mesero_nombre || 'Sin asignar'}</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/5 p-2 rounded-lg">
-                <FiPackage className="text-purple-400" /> 
-                <span>{order.items_count} items</span>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-white/10 flex justify-between items-center mb-4">
-              <span className="text-sm font-bold text-slate-400">Total:</span>
-              <span className="text-2xl font-black text-emerald-400 drop-shadow-md">
-                {formatCurrency(order.total_calculado || order.total)}
-              </span>
-            </div>
-            
-            {order.estado === 'entregado' && (
-              <GlassButton 
-                onClick={() => handleCobrarCuenta(order.id)}
-                disabled={actionLoading}
-                variant="success"
-                className="w-full text-sm py-2"
-              >
-                <FiDollarSign /> {actionLoading ? 'Procesando...' : 'Cobrar Cuenta'}
-              </GlassButton>
             )}
-          </GlassCard>
-        ))}
+          </div>
+        </div>
       </div>
 
-      {/* Modal de Creación */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 bg-[#0f172a]/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-800/60 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl w-full max-w-6xl h-[85vh] overflow-hidden flex flex-col relative">
-            
-            {/* Modal Header */}
-            <div className="px-8 py-5 border-b border-white/10 flex justify-between items-center bg-slate-900/50">
-              <div>
-                <h2 className="text-2xl font-black text-white tracking-tight">Crear Pedido</h2>
-                <p className="text-slate-400 text-sm">Selecciona productos y asigna mesa</p>
-              </div>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-white hover:bg-white/10 p-2 rounded-full transition-all">
-                <FiX className="h-6 w-6" />
+      {/* --- COLUMNA DERECHA: CARRITO / PEDIDOS ACTIVOS --- */}
+      <div className="w-full lg:w-96 flex flex-col gap-6 h-[calc(100vh-2rem)] overflow-hidden">
+        
+        {/* Carrito Actual */}
+        <GlassCard className="flex-1 flex flex-col p-4 border-white/10 bg-slate-800/40 backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <ShoppingBagIcon className="w-6 h-6 text-orange-500" />
+              Orden Actual
+            </h2>
+            {cart.length > 0 && (
+              <button onClick={() => setCart([])} className="text-xs text-red-400 hover:text-red-300">
+                Limpiar
               </button>
-            </div>
-
-            <div className="flex-1 flex overflow-hidden">
-              {/* Columna Izquierda: Menú */}
-              <div className="w-1/2 p-6 border-r border-white/10 overflow-y-auto bg-slate-900/30 custom-scrollbar">
-                <div className="mb-6 sticky top-0 z-10 bg-[#0f172a]/90 backdrop-blur pb-4">
-                  <label className={labelStyle}>Categoría</label>
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className={inputStyle}
-                  >
-                    <option value="todas">Todas las categorías</option>
-                    {menuCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                  {filteredMenuItems.map(item => (
-                    <div 
-                      key={item.id} 
-                      onClick={() => handleAddItemFromMenu(item)}
-                      className="group bg-slate-800/50 hover:bg-slate-700/80 p-4 rounded-2xl border border-white/5 hover:border-orange-500/50 cursor-pointer transition-all duration-200 flex justify-between items-center"
-                    >
-                      <div>
-                        <p className="font-bold text-slate-200 group-hover:text-white transition-colors">{item.nombre}</p>
-                        <p className="text-xs text-slate-500 truncate max-w-[200px]">{item.descripcion}</p>
-                      </div>
-                      <div className="text-right pl-4">
-                        <p className="font-black text-emerald-400">{formatCurrency(item.precio)}</p>
-                        <p className="text-[10px] text-slate-500 uppercase bg-slate-900/50 inline-block px-2 py-0.5 rounded mt-1">{item.categoria}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Columna Derecha: Resumen y Formulario */}
-              <div className="w-1/2 p-8 flex flex-col bg-slate-800/20">
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <label className={labelStyle}>Mesa</label>
-                    <select value={orderForm.mesaId} onChange={e => setOrderForm({...orderForm, mesaId: e.target.value})} className={inputStyle}>
-                      <option value="">Para llevar</option>
-                      {mesas.map(m => <option key={m.id} value={m.id}>Mesa #{m.numero}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={labelStyle}>Mesero</label>
-                    <select value={orderForm.meseroId} onChange={e => setOrderForm({...orderForm, meseroId: e.target.value})} className={inputStyle}>
-                      <option value="">Sin asignar</option>
-                      {meseros.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto space-y-3 mb-6 pr-2 custom-scrollbar">
-                  <h4 className="text-sm font-bold text-slate-300 flex items-center gap-2 uppercase tracking-wider">
-                    <FiShoppingBag className="text-orange-500" /> Platos seleccionados
-                  </h4>
-                  {orderForm.items.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
-                      <FiShoppingBag className="h-16 w-16 mb-2" />
-                      <p className="text-sm">El pedido está vacío</p>
-                    </div>
-                  ) : (
-                    orderForm.items.map((item, index) => (
-                      <div key={index} className="flex justify-between items-center p-4 bg-slate-900/40 rounded-2xl border border-white/5 hover:border-white/10 transition-all">
-                        <div>
-                          <p className="font-bold text-slate-200 text-sm">{item.nombre}</p>
-                          <p className="text-xs text-slate-500 mt-1">{item.cantidad} x {formatCurrency(item.precio_unitario)}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className="font-bold text-white">{formatCurrency(item.subtotal)}</span>
-                          <button 
-                            onClick={() => handleRemoveItem(index)} 
-                            className="text-slate-500 hover:text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-all"
-                          >
-                            <FiTrash2 />
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="pt-6 border-t border-white/10 bg-slate-900/50 -mx-8 -mb-8 p-8 backdrop-blur-sm">
-                  <div className="flex justify-between items-center mb-6">
-                    <span className="text-slate-400 font-medium">Total Estimado:</span>
-                    <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400">
-                      {formatCurrency(getOrderTotal(orderForm.items))}
-                    </span>
-                  </div>
-                  <GlassButton
-                    onClick={handleCreateOrder}
-                    disabled={actionLoading || orderForm.items.length === 0}
-                    variant="primary"
-                    className="w-full py-4 text-lg"
-                  >
-                    {actionLoading ? (
-                      <span className="flex items-center gap-2"><FiZap className="animate-spin"/> Procesando...</span>
-                    ) : (
-                      "Confirmar y Enviar a Cocina"
-                    )}
-                  </GlassButton>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
+
+          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4">
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60">
+                <ShoppingBagIcon className="w-16 h-16 mb-2" />
+                <p className="text-sm">Carrito vacío</p>
+              </div>
+            ) : (
+              cart.map(item => (
+                <div key={item.id} className="flex items-center justify-between bg-slate-900/50 p-3 rounded-xl border border-white/5">
+                  <div className="flex-1">
+                    <h4 className="text-sm font-bold text-white line-clamp-1">{item.nombre}</h4>
+                    <p className="text-xs text-orange-400 font-medium">${Number(item.precio).toFixed(2)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => updateQuantity(item.id, -1)} className="w-6 h-6 rounded bg-slate-700 text-white flex items-center justify-center hover:bg-slate-600">-</button>
+                    <span className="text-sm font-bold w-4 text-center">{item.cantidad}</span>
+                    <button onClick={() => updateQuantity(item.id, 1)} className="w-6 h-6 rounded bg-slate-700 text-white flex items-center justify-center hover:bg-slate-600">+</button>
+                    <button onClick={() => removeFromCart(item.id)} className="ml-2 text-slate-500 hover:text-red-400">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="border-t border-white/10 pt-4 space-y-2">
+            <div className="flex justify-between text-slate-400 text-sm">
+              <span>Subtotal</span>
+              <span>${cartTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-white text-xl font-black">
+              <span>Total</span>
+              <span className="text-orange-500">${cartTotal.toFixed(2)}</span>
+            </div>
+            
+            <GlassButton 
+              onClick={() => setShowCheckout(true)} 
+              disabled={cart.length === 0}
+              variant="primary" 
+              className="w-full mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Procesar Pedido
+            </GlassButton>
+          </div>
+        </GlassCard>
+
+        {/* Lista rápida de pedidos recientes (Opcional visual) */}
+        <GlassCard className="h-1/3 p-4 border-white/10 overflow-hidden flex flex-col">
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3">Pedidos Recientes</h3>
+          <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+            {orders.slice(0, 5).map(order => (
+              <div key={order.id} className="flex justify-between items-center p-2 rounded-lg bg-slate-900/30 border border-white/5">
+                <div>
+                  <p className="text-xs font-bold text-white">Mesa {order.mesa_id ? `#${order.mesa_id}` : 'Para llevar'}</p>
+                  <p className="text-[10px] text-slate-500">{new Date(order.fecha).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                </div>
+                <span className="text-xs font-bold text-emerald-400">${Number(order.total).toFixed(2)}</span>
+              </div>
+            ))}
+            {orders.length === 0 && <p className="text-xs text-slate-600 text-center mt-4">Sin pedidos hoy</p>}
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* --- MODAL DE CHECKOUT --- */}
+      {showCheckout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <GlassCard className="w-full max-w-md p-6 relative animate-in zoom-in-95 duration-200 border-white/20">
+            <button onClick={() => setShowCheckout(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white">
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+            
+            <h2 className="text-2xl font-bold text-white mb-6">Finalizar Pedido</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-1">Asignar Mesa (Opcional)</label>
+                <select 
+                  value={checkoutData.mesa_id}
+                  onChange={(e) => setCheckoutData({...checkoutData, mesa_id: e.target.value})}
+                  className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-orange-500 outline-none"
+                >
+                  <option value="">Para llevar / Sin mesa</option>
+                  {tables.filter(t => t.estado === 'libre' || t.estado === 'ocupada').map(t => (
+                    <option key={t.id} value={t.id}>Mesa #{t.numero} ({t.ubicacion})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-1">Nombre Cliente (Opcional)</label>
+                <input 
+                  type="text" 
+                  value={checkoutData.cliente}
+                  onChange={(e) => setCheckoutData({...checkoutData, cliente: e.target.value})}
+                  placeholder="Ej. Juan Pérez"
+                  className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-orange-500 outline-none"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-white/10">
+                <div className="flex justify-between items-center mb-6">
+                  <span className="text-slate-400">Total a Pagar:</span>
+                  <span className="text-3xl font-black text-orange-500">${cartTotal.toFixed(2)}</span>
+                </div>
+
+                <GlassButton onClick={handleCreateOrder} variant="primary" className="w-full py-4 text-lg shadow-lg shadow-orange-500/20">
+                  <CheckCircleIcon className="w-6 h-6 mr-2" />
+                  Confirmar y Enviar a Cocina
+                </GlassButton>
+              </div>
+            </div>
+          </GlassCard>
         </div>
       )}
 
-      {isPaymentModalOpen && (
-        <PaymentModal 
-          sale={selectedSale} 
-          onClose={() => setIsPaymentModalOpen(false)} 
-          onPaymentSuccess={() => {
-            setIsPaymentModalOpen(false);
-            loadData();
-          }} 
-        />
+      {/* Notificaciones Flotantes */}
+      {error && (
+        <div className="fixed bottom-4 right-4 bg-red-500/90 backdrop-blur text-white px-6 py-4 rounded-2xl shadow-2xl border border-red-400/30 z-50 animate-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-3">
+            <XMarkIcon className="w-6 h-6" />
+            <span className="font-bold">{error}</span>
+          </div>
+        </div>
+      )}
+      {success && (
+        <div className="fixed bottom-4 right-4 bg-emerald-500/90 backdrop-blur text-white px-6 py-4 rounded-2xl shadow-2xl border border-emerald-400/30 z-50 animate-in slide-in-from-bottom-5">
+          <div className="flex items-center gap-3">
+            <CheckCircleIcon className="w-6 h-6" />
+            <span className="font-bold">{success}</span>
+          </div>
+        </div>
       )}
     </div>
   );

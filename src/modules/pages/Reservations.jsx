@@ -1,361 +1,454 @@
-import { useEffect, useState } from 'react';
-import {
-  PlusIcon,
-  PencilIcon,
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { 
+  PlusIcon, 
+  CalendarDaysIcon, 
+  ClockIcon, 
+  UserGroupIcon, 
+  CheckCircleIcon, 
+  XMarkIcon, 
+  ExclamationTriangleIcon,
+  TableCellsIcon,
+  PhoneIcon,
+  EnvelopeIcon,
   TrashIcon,
-  CheckIcon,
-  XMarkIcon,
-  CalendarDaysIcon,
-  UserGroupIcon,
-  ClockIcon,
+  PencilIcon
 } from '@heroicons/react/24/outline';
-import { ReservationService, StaffService, TableService } from "../../Services/Api"; 
 
-// ── ESTILOS GLOBALES (Simulando tu guía de estilos) ──
-const styles = {
-  cardBase: "bg-slate-800/40 backdrop-blur-xl border border-white/10 rounded-3xl relative overflow-hidden",
-  inputField: "bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all w-full",
-  label: "text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1 block",
-  btnPrimary: "bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold py-3 px-6 rounded-2xl shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-105 active:scale-95 transition-all duration-300 flex items-center gap-2 justify-center",
-  btnSecondary: "bg-white/10 text-white font-bold py-3 px-6 rounded-2xl border border-white/10 hover:bg-white/20 hover:scale-105 transition-all duration-300 flex items-center gap-2 justify-center",
-  btnDanger: "bg-white/10 text-red-400 font-bold py-2 px-3 rounded-xl border border-white/10 hover:bg-red-500/20 hover:text-red-300 transition-all",
-  badge: "text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-tighter",
-};
+// IMPORTACIONES OBLIGATORIAS
+import GlassCard from "../../components/GlassCard";
+import GlassButton from "../../components/GlassButton";
 
-const initialForm = {
-  nombre: '', apellido: '', telefono: '', email: '',
-  fecha: '', hora: '', 
-  numero_personas: 1, estado: 'solicitada',
-  mesero_asignado: '', 
-  mesas_asignadas: '', 
-  notas: '',
-};
+const API_URL = '/api/reservations';
 
-export default function Reservations() {
-  const [data, setData] = useState([]);
-  const [staff, setStaff] = useState([]); 
-  const [tables, setTables] = useState([]); 
-  const [form, setForm] = useState(initialForm);
-  const [loading, setLoading] = useState(false);
+// --- Estilos Consistentes (Glassmorphism) ---
+const inputClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all";
+const labelClass = "block text-sm font-bold text-slate-300 mb-1.5 ml-1";
+const selectClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all cursor-pointer";
+
+export default function ReservationsManager() {
+  const [reservations, setReservations] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Filtros
+  const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+  const [filterStatus, setFilterStatus] = useState('');
 
-  const load = async () => {
+  const initialFormState = {
+    nombre_cliente: '',
+    telefono_cliente: '',
+    email: '',
+    fecha: new Date().toISOString().split('T')[0],
+    hora: '',
+    numero_personas: 2,
+    mesas_asignadas: [], // Array de IDs de mesas
+    notas: '',
+    estado: 'pendiente'
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
+
+  useEffect(() => {
+    fetchReservations();
+    fetchTables();
+  }, [filterDate, filterStatus]);
+
+  // --- Lógica de Conexión con Backend ---
+  
+  const fetchReservations = async () => {
     try {
       setLoading(true);
-      const [tablesData, reservationsData] = await Promise.all([
-        TableService.getAll(), 
-        ReservationService.getAll()
-      ]);
-      setTables(tablesData);
-      setData(reservationsData);
-    } catch (e) {
-      setError(e.message || 'Error al cargar reservas');
+      const params = {};
+      if (filterDate) params.fecha = filterDate;
+      if (filterStatus) params.estado = filterStatus;
+
+      const response = await axios.get(API_URL, { params });
+      setReservations(response.data);
+    } catch (err) {
+      console.error("Error fetching reservations:", err);
+      setError('Error al cargar las reservaciones.');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadStaff = async () => {
+  const fetchTables = async () => {
     try {
-      const staffData = await StaffService.getAll();
-      setStaff(staffData);
-    } catch (e) {
-      console.error("Error cargando staff:", e);
+      // Obtenemos solo mesas libres o disponibles para asignar
+      const response = await axios.get('/api/tables'); 
+      setTables(response.data);
+    } catch (err) {
+      console.error("Error cargando mesas:", err);
     }
-  };
-
-  useEffect(() => {
-    load();
-    loadStaff();
-  }, []);
-
-  const handleNewReservation = () => {
-    setForm(initialForm);
-    setEditingId(null);
-    setError('');
-    setSuccess('');
-    setShowForm(true);
-  };
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
     try {
+      // Validación básica
+      if (!formData.hora) throw new Error("La hora es obligatoria");
+      if (formData.mesas_asignadas.length === 0 && formData.numero_personas > 0) {
+        // Advertencia suave, no bloqueo, pero bueno avisar
+        // console.warn("Reserva sin mesas asignadas explícitamente");
+      }
+
       const payload = {
-        nombre_cliente: `${form.nombre} ${form.apellido}`.trim(),
-        telefono_cliente: form.telefono,
-        email: form.email,
-        fecha: form.fecha,
-        hora: form.hora,
-        numero_personas: parseInt(form.numero_personas),
-        mesas_asignadas: form.mesas_asignadas,
-        notas: form.notas,
-        estado: form.estado,
-        mesero_asignado: form.mesero_asignado
+        ...formData,
+        numero_personas: Number(formData.numero_personas),
+        // Convertir array de IDs a string JSON si la BD lo pide así, o dejarlo array si es JSONB
+        mesas_asignadas: JSON.stringify(formData.mesas_asignadas) 
       };
 
       if (editingId) {
-        await ReservationService.update(editingId, payload);
-        setSuccess('Reserva actualizada correctamente');
+        await axios.put(`${API_URL}/${editingId}`, payload);
+        setSuccess('Reservación actualizada correctamente');
       } else {
-        await ReservationService.create(payload);
-        setSuccess('Reserva creada exitosamente');
+        await axios.post(API_URL, payload);
+        setSuccess('Reservación creada exitosamente');
       }
-      
-      setShowForm(false);
-      setEditingId(null);
-      load();
-    } catch (e) {
-      setError(e.message || 'Error al guardar la reserva');
+      handleCloseForm();
+      fetchReservations();
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || err.message || 'Error al guardar la reservación');
+      setTimeout(() => setError(''), 4000);
     }
   };
 
-  const remove = async (id) => {
-    if (!window.confirm('¿Estás seguro de eliminar esta reserva?')) return;
+  const handleDelete = async (id) => {
+    if (window.confirm('¿Cancelar esta reservación? Esta acción no se puede deshacer.')) {
+      try {
+        await axios.delete(`${API_URL}/${id}`);
+        setSuccess('Reservación cancelada');
+        fetchReservations();
+      } catch (err) {
+        setError('Error al cancelar');
+      }
+    }
+  };
+
+  const handleEdit = (res) => {
+    let mesasArray = [];
     try {
-      await ReservationService.delete(id);
-      setSuccess('Reserva eliminada');
-      load();
-    } catch (e) {
-      setError(e.message || 'Error al eliminar');
-    }
-  };
+      mesasArray = typeof res.mesas_asignadas === 'string' ? JSON.parse(res.mesas_asignadas) : res.mesas_asignadas;
+    } catch (e) { mesasArray = []; }
 
-  const edit = (r) => {
-    const nameParts = r.nombre_cliente ? r.nombre_cliente.split(' ') : ['', ''];
-    const formattedDate = r.fecha ? r.fecha.split('T')[0] : '';
-    const formattedTime = r.hora ? r.hora.substring(0, 5) : '';
-
-    setForm({
-      ...r,
-      nombre: nameParts[0] || '',
-      apellido: nameParts.slice(1).join(' ') || '',
-      fecha: formattedDate,
-      hora: formattedTime,
+    setFormData({
+      ...res,
+      mesas_asignadas: mesasArray
     });
-    setEditingId(r.id);
+    setEditingId(res.id);
     setShowForm(true);
   };
 
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setFormData(initialFormState);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const toggleTableSelection = (tableId) => {
+    setFormData(prev => {
+      const current = prev.mesas_asignadas;
+      if (current.includes(tableId)) {
+        return { ...prev, mesas_asignadas: current.filter(id => id !== tableId) };
+      } else {
+        return { ...prev, mesas_asignadas: [...current, tableId] };
+      }
+    });
+  };
+
   // Helper para colores de estado
-  const getStatusStyle = (status) => {
-    switch(status) {
-      case 'confirmada': return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
-      case 'cancelada': return 'bg-red-500/20 text-red-300 border border-red-500/30';
-      default: return 'bg-blue-500/20 text-blue-300 border border-blue-500/30';
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pendiente': return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+      case 'confirmada': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
+      case 'cancelada': return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'finalizada': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-6 md:p-10 font-sans selection:bg-orange-500/30">
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-4 md:p-8 font-sans">
       
-      {/* ── HEADER ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+      {/* --- Header --- */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
         <div>
-          <h1 className="text-4xl font-black text-white tracking-tight flex items-center gap-3">
-            <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">Reservas</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-slate-400 text-2xl font-light">Gestión</span>
+          <h1 className="text-4xl font-black text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-amber-500">
+            Reservaciones
           </h1>
-          <p className="text-slate-400 mt-2 text-sm">Administra las mesas y clientes de tu restaurante.</p>
+          <p className="text-slate-400 mt-2 text-lg">Gestiona las citas y asignación de mesas futuras.</p>
         </div>
-        <button
-          onClick={handleNewReservation}
-          className={styles.btnPrimary}
-        >
-          <PlusIcon className="w-5 h-5" /> Nueva Reserva
-        </button>
+        <GlassButton onClick={() => setShowForm(true)} variant="primary">
+          <PlusIcon className="w-5 h-5 mr-2" />
+          Nueva Reserva
+        </GlassButton>
       </div>
 
-      {/* ── NOTIFICACIONES ── */}
+      {/* --- Alertas --- */}
       {error && (
-        <div className="mb-6 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl flex gap-3 items-center backdrop-blur-md animate-in fade-in slide-in-from-top-2">
-          <XMarkIcon className="w-5 h-5 flex-shrink-0" /> <span>{error}</span>
-        </div>
+        <GlassCard className="mb-6 border-l-4 border-l-red-500 bg-red-900/20 backdrop-blur-md animate-pulse">
+          <div className="p-4 flex justify-between items-center">
+            <div className="flex items-center gap-3 text-red-200">
+              <ExclamationTriangleIcon className="w-6 h-6" /> 
+              <span className="font-bold">{error}</span>
+            </div>
+            <button onClick={() => setError('')} className="text-red-400 hover:text-white transition">✕</button>
+          </div>
+        </GlassCard>
       )}
-
       {success && (
-        <div className="mb-6 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl flex gap-3 items-center backdrop-blur-md animate-in fade-in slide-in-from-top-2">
-          <CheckIcon className="w-5 h-5 flex-shrink-0" /> <span>{success}</span>
-        </div>
+        <GlassCard className="mb-6 border-l-4 border-l-emerald-500 bg-emerald-900/20 backdrop-blur-md">
+          <div className="p-4 flex justify-between items-center">
+            <div className="flex items-center gap-3 text-emerald-200">
+              <CheckCircleIcon className="w-6 h-6" /> 
+              <span className="font-bold">{success}</span>
+            </div>
+            <button onClick={() => setSuccess('')} className="text-emerald-400 hover:text-white transition">✕</button>
+          </div>
+        </GlassCard>
       )}
 
-      {/* ── FORMULARIO (GLASS CARD) ── */}
+      {/* --- Controles y Filtros --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <GlassCard className="p-4 flex flex-col justify-center border-white/10">
+          <label className={labelClass}>Fecha:</label>
+          <input 
+            type="date" 
+            value={filterDate} 
+            onChange={(e) => setFilterDate(e.target.value)}
+            className={inputClass} 
+          />
+        </GlassCard>
+        
+        <GlassCard className="p-4 flex flex-col justify-center border-white/10">
+          <label className={labelClass}>Estado:</label>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="confirmada">Confirmada</option>
+            <option value="cancelada">Cancelada</option>
+            <option value="finalizada">Finalizada</option>
+          </select>
+        </GlassCard>
+
+        <GlassCard className="p-4 flex flex-col justify-center items-center text-center border-white/10 bg-orange-900/10">
+          <span className="text-orange-400 text-xs uppercase font-bold tracking-wider">Total Reservas Día</span>
+          <span className="text-3xl font-black text-white">{reservations.length}</span>
+        </GlassCard>
+      </div>
+
+      {/* --- Formulario Modal Inline --- */}
       {showForm && (
-        <div className={`${styles.cardBase} p-8 mb-8 animate-in fade-in zoom-in-95 duration-300`}>
-          {/* Glow effect background */}
-          <div className="absolute -right-10 -top-10 w-64 h-64 bg-gradient-to-br from-orange-500 to-amber-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
-          
-          <div className="relative z-10">
-            <h2 className="text-2xl font-bold text-white mb-6 border-b border-white/10 pb-4">
-              {editingId ? '✏️ Editar Reserva' : '✨ Crear Nueva Reserva'}
+        <GlassCard className="mb-8 p-8 animate-in fade-in slide-in-from-top-8 duration-300 border-white/10 bg-slate-800/40 relative z-20">
+          <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+            <h2 className="text-2xl font-bold text-white">
+              {editingId ? 'Editar Reservación' : 'Nueva Reservación'}
             </h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <button onClick={handleCloseForm} className="text-slate-400 hover:text-white transition">
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Datos del Cliente */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className={styles.label}>Nombre</label>
-                <input name="nombre" value={form.nombre} onChange={handleChange} className={styles.inputField} placeholder="Ej. Juan" required />
+                <label className={labelClass}>Nombre Cliente</label>
+                <input 
+                  name="nombre_cliente" type="text" value={formData.nombre_cliente} onChange={handleInputChange}
+                  className={inputClass} required placeholder="Ej. Juan Pérez"
+                />
               </div>
               <div>
-                <label className={styles.label}>Apellido</label>
-                <input name="apellido" value={form.apellido} onChange={handleChange} className={styles.inputField} placeholder="Ej. Pérez" required />
+                <label className={labelClass}>Teléfono</label>
+                <input 
+                  name="telefono_cliente" type="tel" value={formData.telefono_cliente} onChange={handleInputChange}
+                  className={inputClass} placeholder="+52 ..."
+                />
               </div>
               <div>
-                <label className={styles.label}>Teléfono</label>
-                <input name="telefono" value={form.telefono} onChange={handleChange} className={styles.inputField} placeholder="+54 9 11..." />
+                <label className={labelClass}>Email (Opcional)</label>
+                <input 
+                  name="email" type="email" value={formData.email} onChange={handleInputChange}
+                  className={inputClass} placeholder="cliente@email.com"
+                />
               </div>
-              
+            </div>
+
+            {/* Detalles de la Reserva */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div>
-                <label className={styles.label}>Email</label>
-                <input type="email" name="email" value={form.email} onChange={handleChange} className={styles.inputField} placeholder="cliente@email.com" />
+                <label className={labelClass}>Fecha</label>
+                <input 
+                  name="fecha" type="date" value={formData.fecha} onChange={handleInputChange}
+                  className={inputClass} required
+                />
               </div>
-
-              <div className="relative">
-                <label className={styles.label}>Fecha</label>
-                <div className="relative">
-                  <input type="date" name="fecha" value={form.fecha} onChange={handleChange} className={`${styles.inputField} pl-10`} required />
-                  <CalendarDaysIcon className="w-5 h-5 text-slate-500 absolute left-3 top-3.5 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="relative">
-                <label className={styles.label}>Hora</label>
-                <div className="relative">
-                  <input type="time" name="hora" value={form.hora} onChange={handleChange} className={`${styles.inputField} pl-10`} required />
-                  <ClockIcon className="w-5 h-5 text-slate-500 absolute left-3 top-3.5 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="relative">
-                <label className={styles.label}>Personas</label>
-                <div className="relative">
-                  <input type="number" name="numero_personas" value={form.numero_personas} onChange={handleChange} className={`${styles.inputField} pl-10`} required />
-                  <UserGroupIcon className="w-5 h-5 text-slate-500 absolute left-3 top-3.5 pointer-events-none" />
-                </div>
-              </div>
-
               <div>
-                <label className={styles.label}>Mesa Asignada</label>
-                <select name="mesas_asignadas" value={form.mesas_asignadas} onChange={handleChange} className={styles.inputField}>
-                  <option value="">Sin mesa específica</option>
-                  {tables.map(t => <option key={t.id} value={t.id}>Mesa #{t.numero}</option>)}
-                </select>
+                <label className={labelClass}>Hora</label>
+                <input 
+                  name="hora" type="time" value={formData.hora} onChange={handleInputChange}
+                  className={inputClass} required
+                />
               </div>
-
               <div>
-                <label className={styles.label}>Estado</label>
-                <select name="estado" value={form.estado} onChange={handleChange} className={styles.inputField}>
-                  <option value="solicitada">Solicitada</option>
+                <label className={labelClass}>Personas</label>
+                <input 
+                  name="numero_personas" type="number" min="1" value={formData.numero_personas} onChange={handleInputChange}
+                  className={inputClass} required
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Estado</label>
+                <select name="estado" value={formData.estado} onChange={handleInputChange} className={selectClass}>
+                  <option value="pendiente">Pendiente</option>
                   <option value="confirmada">Confirmada</option>
                   <option value="cancelada">Cancelada</option>
-                </select>
-              </div>
-
-              <div>
-                <label className={styles.label}>Mesero Asignado</label>
-                <select name="mesero_asignado" value={form.mesero_asignado} onChange={handleChange} className={styles.inputField}>
-                  <option value="">Sin asignar</option>
-                  {staff.map(s => <option key={s.id} value={s.id}>{s.nombre} {s.apellido || ''}</option>)}
+                  <option value="finalizada">Finalizada</option>
                 </select>
               </div>
             </div>
 
-            <div className="mt-6">
-              <label className={styles.label}>Notas Adicionales</label>
-              <textarea
-                name="notas"
-                value={form.notas}
-                onChange={handleChange}
-                className={`${styles.inputField} h-24 resize-none`}
-                placeholder="Alergias, ocasiones especiales, etc."
+            {/* Selector de Mesas (Visual) */}
+            <div>
+              <label className={labelClass}>Asignar Mesas (Selecciona múltiples si es necesario)</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3 mt-2 max-h-48 overflow-y-auto p-2 bg-slate-900/30 rounded-2xl border border-white/5">
+                {tables.length === 0 ? (
+                  <p className="text-slate-500 text-sm col-span-full text-center py-4">No hay mesas registradas.</p>
+                ) : (
+                  tables.map(table => {
+                    const isSelected = formData.mesas_asignadas.includes(table.id);
+                    const isOccupied = table.estado === 'ocupada';
+                    return (
+                      <button
+                        key={table.id}
+                        type="button"
+                        disabled={isOccupied && !isSelected} // Permitir deseleccionar si ya estaba
+                        onClick={() => toggleTableSelection(table.id)}
+                        className={`p-3 rounded-xl text-sm font-bold transition-all border ${
+                          isSelected 
+                            ? 'bg-orange-500 text-white border-orange-400 shadow-lg shadow-orange-500/20 scale-105' 
+                            : isOccupied
+                              ? 'bg-red-900/20 text-red-400 border-red-900/50 opacity-50 cursor-not-allowed'
+                              : 'bg-slate-800 text-slate-300 border-white/10 hover:bg-slate-700 hover:text-white'
+                        }`}
+                      >
+                        Mesa {table.numero}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-2 ml-1">
+                {formData.mesas_asignadas.length > 0 
+                  ? `${formData.mesas_asignadas.length} mesa(s) seleccionada(s)` 
+                  : 'Ninguna mesa asignada (se asignará al llegar)'}
+              </p>
+            </div>
+            
+            <div>
+              <label className={labelClass}>Notas Adicionales</label>
+              <textarea 
+                name="notas" value={formData.notas} onChange={handleInputChange}
+                className={`${inputClass} h-20`} placeholder="Ej. Alergia a nueces, cumpleaños, etc."
               />
             </div>
 
-            <div className="flex gap-4 justify-end pt-8 mt-4 border-t border-white/10">
-              <button type="button" onClick={() => setShowForm(false)} className={styles.btnSecondary}>
-                Cancelar
-              </button>
-              <button type="submit" className={styles.btnPrimary}>
+            <div className="flex gap-4 pt-4 border-t border-white/10">
+              <GlassButton type="submit" variant="primary" className="flex-1">
                 {editingId ? 'Actualizar Reserva' : 'Confirmar Reserva'}
-              </button>
+              </GlassButton>
+              <GlassButton type="button" variant="secondary" onClick={handleCloseForm}>
+                Cancelar
+              </GlassButton>
             </div>
-          </div>
-        </div>
+          </form>
+        </GlassCard>
       )}
 
-      {/* ── TABLA DE DATOS (GLASS CARD) ── */}
-      <div className={`${styles.cardBase} overflow-hidden`}>
-        <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-gradient-to-tr from-blue-500 to-indigo-500 opacity-10 blur-3xl rounded-full pointer-events-none" />
-        
-        <div className="relative z-10 overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-white/10 text-slate-400 text-xs uppercase tracking-widest font-bold">
-                <th className="px-6 py-5">Cliente</th>
-                <th className="px-6 py-5">Fecha & Hora</th>
-                <th className="px-6 py-5 text-center">Pax</th>
-                <th className="px-6 py-5">Estado</th>
-                <th className="px-6 py-5 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {loading ? (
-                <tr><td colSpan="5" className="text-center py-12 text-slate-500 animate-pulse">Cargando datos...</td></tr>
-              ) : data.length === 0 ? (
-                <tr><td colSpan="5" className="text-center py-12 text-slate-500">No hay reservas registradas.</td></tr>
-              ) : (
-                data.map((r) => (
-                  <tr key={r.id} className="group hover:bg-white/5 transition-colors duration-200">
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-white text-base">{r.nombre_cliente}</div>
-                      <div className="text-xs text-slate-500">{r.email || r.telefono_cliente}</div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-300 text-sm font-medium">
-                      <div className="flex flex-col">
-                        <span>{r.fecha}</span>
-                        <span className="text-slate-500 text-xs">{r.hora}</span>
+      {/* --- Lista de Reservaciones (Timeline/Card View) --- */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
+          <p className="font-bold tracking-widest uppercase">Cargando agenda...</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {reservations.length === 0 ? (
+            <GlassCard className="text-center py-20 border-dashed border-white/10">
+              <CalendarDaysIcon className="w-16 h-16 mx-auto text-slate-600 mb-4" />
+              <p className="text-slate-400 text-lg">No hay reservaciones para esta fecha.</p>
+            </GlassCard>
+          ) : (
+            reservations.map((res) => {
+               // Parsear mesas asignadas para mostrar
+               let mesasIds = [];
+               try { mesasIds = typeof res.mesas_asignadas === 'string' ? JSON.parse(res.mesas_asignadas) : res.mesas_asignadas; } catch(e){}
+               const mesasNombres = tables.filter(t => mesasIds.includes(t.id)).map(t => `#${t.numero}`).join(', ');
+
+               return (
+                <GlassCard key={res.id} className="p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 group hover:-translate-y-1 transition-transform duration-300 border-white/10 bg-slate-800/30">
+                  
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-2xl border ${getStatusColor(res.estado)} bg-opacity-10`}>
+                      <ClockIcon className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-white">{res.nombre_cliente}</h3>
+                      <div className="flex flex-wrap gap-3 mt-1 text-sm text-slate-400">
+                        <span className="flex items-center gap-1"><ClockIcon className="w-4 h-4"/> {res.hora}</span>
+                        <span className="flex items-center gap-1"><UserGroupIcon className="w-4 h-4"/> {res.numero_personas} personas</span>
+                        {mesasNombres && (
+                          <span className="flex items-center gap-1 text-orange-400"><TableCellsIcon className="w-4 h-4"/> Mesas: {mesasNombres}</span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-700/50 text-slate-300 text-xs font-bold border border-white/10">
-                        {r.numero_personas}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`${styles.badge} ${getStatusStyle(r.estado)} border`}>
-                        {r.estado}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <button onClick={() => edit(r)} className="p-2 hover:bg-blue-500/20 rounded-xl transition-all text-blue-400 hover:text-blue-300">
-                          <PencilIcon className="w-5 h-5" />
-                        </button>
-                        <button onClick={() => remove(r.id)} className="p-2 hover:bg-red-500/20 rounded-xl transition-all text-red-400 hover:text-red-300">
+                      {res.notas && (
+                        <p className="mt-2 text-xs text-slate-500 italic bg-slate-900/50 p-2 rounded-lg inline-block">
+                          "{res.notas}"
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${getStatusColor(res.estado)}`}>
+                      {res.estado}
+                    </span>
+                    
+                    <div className="flex gap-2 pl-2 border-l border-white/10">
+                      <button onClick={() => handleEdit(res)} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition" title="Editar">
+                        <PencilIcon className="w-5 h-5" />
+                      </button>
+                      {res.estado !== 'cancelada' && (
+                        <button onClick={() => handleDelete(res.id)} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition" title="Cancelar">
                           <TrashIcon className="w-5 h-5" />
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      )}
+                    </div>
+                  </div>
+                </GlassCard>
+               );
+            })
+          )}
         </div>
-      </div>
+      )}
     </div>
   );
-}
+};
