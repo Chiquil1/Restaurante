@@ -1,84 +1,73 @@
-const pool = require("../config/Db");
+const pool = require('../config/Db');
 
-class Tables {
-  /**
-   * Obtiene todas las mesas con la información expandida.
-   * He renombrado los alias para que el Frontend los reconozca más fácilmente.
-   */
-  static async getMesas() {
-    try {
-      const query = `
-        SELECT 
-          m.*, 
-          p.nombre as mesero, 
-          r.nombre_cliente as cliente 
-        FROM mesas m
-        LEFT JOIN personal p ON m.mesero_id = p.id
-        LEFT JOIN reservations r ON m.reserva_id = r.id
-        ORDER BY m.piso, m.numero
-      `;
-      const { rows } = await pool.query(query);
-      return rows;
-    } catch (error) {
-      throw new Error(`Error al obtener mesas: ${error.message}`, { cause: error });
+exports.getAllTables = async () => {
+    const result = await pool.query('SELECT * FROM mesas ORDER BY numero');
+    return result.rows;
+};
+
+exports.getTableById = async (id) => {
+    const result = await pool.query('SELECT * FROM mesas WHERE id = $1', [id]);
+    return result.rows[0];
+};
+
+// --- FUNCIÓN AÑADIDA: Esto soluciona el Error 500 ---
+exports.getWaiters = async () => {
+    // Buscamos en la tabla personal a quienes sean Meseros
+    const result = await pool.query(
+        "SELECT id, nombre, apellido FROM personal WHERE puesto = 'Mesero' OR rol_permisos = 'Mesero' ORDER BY nombre"
+    );
+    return result.rows;
+};
+
+exports.createTable = async (table) => {
+    const { numero, capacidad, piso, ubicacion, estado, posicion_x, posicion_y } = table;
+    
+    // Forzamos que los valores numéricos sean realmente números para evitar errores de tipo
+    const valNumero = parseInt(numero);
+    const valCapacidad = parseInt(capacidad) || 2;
+    const valPiso = parseInt(piso) || 1;
+    const valPosX = parseInt(posicion_x) || 0;
+    const valPosY = parseInt(posicion_y) || 0;
+
+    if (isNaN(valNumero)) {
+        throw new Error("El número de mesa debe ser un valor numérico válido");
     }
-  }
 
-  static async getMeseros() {
-    try {
-      const query = `SELECT id, nombre FROM personal WHERE puesto = 'Mesero' OR puesto = 'Waiter'`;
-      const { rows } = await pool.query(query);
-      return rows;
-    } catch (error) {
-      throw new Error(`Error al obtener meseros: ${error.message}`, { cause: error });
-    }
-  }
+    const result = await pool.query(
+        `INSERT INTO mesas (numero, capacidad, piso, ubicacion, estado, posicion_x, posicion_y)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [valNumero, valCapacidad, valPiso, ubicacion, estado || 'libre', valPosX, valPosY]
+    );
+    return result.rows[0];
+};
 
-  static async createMesa(data) {
-    try {
-      const { numero, capacidad, piso, ubicacion, estado, reserva_id, mesero_id } = data;
-      const query = `
-        INSERT INTO mesas (numero, capacidad, piso, ubicacion, estado, reserva_id, mesero_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING *
-      `;
-      const { rows } = await pool.query(query, [numero, capacidad, piso, ubicacion, estado, reserva_id, mesero_id]);
-      return rows[0];
-    } catch (error) {
-      throw new Error(`Error al crear mesa: ${error.message}`, { cause: error });
-    }
-  }
+exports.updateTable = async (id, table) => {
+    const { numero, capacidad, piso, ubicacion, estado, mesero_id, reserva_id, posicion_x, posicion_y, cliente, total } = table;
+    const result = await pool.query(
+        `UPDATE mesas SET
+            numero=$1, capacidad=$2, piso=$3, ubicacion=$4, estado=$5, mesero_id=$6, reserva_id=$7, posicion_x=$8, posicion_y=$9, cliente=$10, total=$11
+        WHERE id=$12 RETURNING *`,
+        [numero, capacidad, piso, ubicacion, estado, mesero_id, reserva_id, posicion_x, posicion_y, cliente, total, id]
+    );
+    return result.rows[0];
+};
 
-  static async updateMesa(id, data) {
-    try {
-      const { estado, cliente, total, mesero_id, reserva_id, posicion_x, posicion_y } = data;
-      const query = `
-        UPDATE mesas 
-        SET estado = COALESCE($1, estado), 
-            cliente = COALESCE($2, cliente), 
-            total = COALESCE($3, total), 
-            mesero_id = COALESCE($4, mesero_id), 
-            reserva_id = COALESCE($5, reserva_id),
-            posicion_x = COALESCE($6, posicion_x),
-            posicion_y = COALESCE($7, posicion_y)
-        WHERE id = $8 
-        RETURNING *
-      `;
-      const { rows } = await pool.query(query, [estado, cliente, total, mesero_id, reserva_id, posicion_x, posicion_y, id]);
-      return rows[0];
-    } catch (error) {
-      throw new Error(`Error al actualizar mesa: ${error.message}`, { cause: error });
-    }
-  }
+exports.deleteTable = async (id) => {
+    await pool.query('DELETE FROM mesas WHERE id = $1', [id]);
+    return { message: 'Mesa eliminada' };
+};
 
-  static async deleteMesa(id) {
-    try {
-      await pool.query('DELETE FROM mesas WHERE id = $1', [id]);
-      return { success: true };
-    } catch (error) {
-      throw new Error(`Error al eliminar mesa: ${error.message}`, { cause: error });
-    }
-  }
-}
+exports.getTableByStatus = async (estado) => {
+    const result = await pool.query('SELECT * FROM mesas WHERE estado = $1 ORDER BY numero', [estado]);
+    return result.rows;
+};
 
-module.exports = Tables;
+exports.updateTableStatus = async (id, estado) => {
+    const result = await pool.query('UPDATE mesas SET estado = $1 WHERE id = $2 RETURNING *', [estado, id]);
+    return result.rows[0];
+};
+
+exports.assignWaiter = async (id, mesero_id) => {
+    const result = await pool.query('UPDATE mesas SET mesero_id = $1 WHERE id = $2 RETURNING *', [mesero_id, id]);
+    return result.rows[0];
+};

@@ -1,82 +1,81 @@
-const salesService = require('../Services/salesService');
+const salesModel = require('../Models/salesModel');
 
-const salesController = {
-    // GET /api/sales
-    async getAllSales(req, res) {
-        try {
-            const { startDate, endDate } = req.query;
-            const sales = await salesService.getAllSales(startDate, endDate);
-            res.json({ success: true, data: sales });
-        } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
-        }
-    },
-
-    // GET /api/sales/summary
-    async getSummary(req, res) {
-        try {
-            const { startDate, endDate } = req.query;
-            const summary = await salesService.getSummary(startDate, endDate);
-            res.json({ success: true, data: summary });
-        } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
-        }
-    },
-
-    // GET /api/sales/payment-summary
-    async getPaymentSummary(req, res) {
-        try {
-            const { startDate, endDate } = req.query;
-            const summary = await salesService.getPaymentSummary(startDate, endDate);
-            res.json({ success: true, data: summary });
-        } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
-        }
-    },
-
-    // GET /api/sales/by-order/:orderId
-    async getSaleByOrderId(req, res) {
-        try {
-            const { orderId } = req.params;
-            const sale = await salesService.getSaleByOrderId(orderId);
-            if (!sale) return res.status(404).json({ success: false, message: 'Venta no encontrada.' });
-            res.json({ success: true, data: sale });
-        } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
-        }
-    },
-
-    // GET /api/sales/total
-    async getTotalSales(req, res) {
-        try {
-            const total = await salesService.getTotalSales();
-            res.json({ success: true, data: total });
-        } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
-        }
-    },
-
-    // POST /api/sales
-    async createSale(req, res) {
-        try {
-            const sale = await salesService.createSale(req.body);
-            res.status(201).json({ success: true, data: sale });
-        } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
-        }
-    },
-
-    // PUT /api/sales/:id/status
-    async updateStatus(req, res) {
-        try {
-            const { id } = req.params;
-            const { status } = req.body;
-            const sale = await salesService.updateStatus(id, status);
-            res.json({ success: true, data: sale });
-        } catch (err) {
-            res.status(500).json({ success: false, message: err.message });
-        }
+exports.getAllSales = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const sales = await salesModel.getAllSales(startDate, endDate);
+        res.json(sales);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 };
 
-module.exports = salesController;
+exports.getSaleById = async (req, res) => {
+    try {
+        const sale = await salesModel.getSaleById(req.params.id);
+        if (!sale) return res.status(404).json({ error: 'Venta no encontrada' });
+        res.json(sale);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getSummary = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const summary = await salesModel.getSummary(startDate, endDate);
+        res.json(summary);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getPaymentSummary = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const summary = await salesModel.getPaymentSummary(startDate, endDate);
+        res.json(summary);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.createSale = async (req, res) => {
+    try {
+        const sale = await salesModel.createSale(req.body);
+        res.status(201).json(sale);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.updateSaleStatus = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const sale = await salesModel.updateSaleStatus(req.params.id, status);
+        if (!sale) return res.status(404).json({ error: 'Venta no encontrada' });
+        res.json(sale);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.deleteSale = async (req, res) => {
+    try {
+        const result = await salesModel.deleteSale(req.params.id);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getTotal = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        const data = await salesModel.getTotalSales(startDate, endDate);
+        res.json(data);
+    } catch (error) {
+        console.error("Error al calcular total de ventas:", error);
+        res.status(500).json({ error: "Error interno al calcular el total de ventas" });
+    }
+};

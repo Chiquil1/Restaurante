@@ -1,15 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const controller = require('../Controller/staffController');
+const staffController = require('../Controller/staffController');
 
-// 1. RUTAS FIJAS (Deben ir primero para evitar conflictos con :id)
-router.get('/schedule', controller.getSchedule);
-router.put('/schedule', controller.updateShift);
-router.post('/ausencias', controller.addAbsence);
-
-// 2. RUTAS DE PERSONAL Y PARÁMETROS (Deben ir después)
-router.get('/', controller.getStaff);
-router.post('/', controller.createStaff);
-router.get('/:id/ausencias', controller.getAbsences);
+router.get('/', staffController.getAllStaff);
+router.get('/:id', staffController.getStaffById);
+router.post('/', staffController.createStaff);
+router.put('/:id', staffController.updateStaff);
+router.delete('/:id', staffController.deleteStaff);
+router.get('/ausencias', staffController.getAusencias);
+router.post('/ausencias', staffController.createAusencia);
 
 module.exports = router;

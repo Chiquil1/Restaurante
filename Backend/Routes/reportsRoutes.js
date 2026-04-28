@@ -1,21 +1,11 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
+const reportsController = require('../Controller/reportsController');
 
-const controller = require("../Controller/reportsController");
-
-// GET sales report
-router.get("/sales", controller.getSalesReport);
-
-// GET reservations report
-router.get("/reservations", controller.getReservationsReport);
-
-// GET occupancy report
-router.get("/occupancy", controller.getOccupancyReport);
-
-// GET menu popularity report
-router.get("/menu-popularity", controller.getMenuPopularityReport);
-
-// GET staff performance report
-router.get("/staff-performance", controller.getStaffPerformanceReport);
+router.get('/ventas', reportsController.getSalesReport);
+router.get('/reservas', reportsController.getReservationsReport);
+router.get('/ocupacion', reportsController.getOccupancyReport);
+router.get('/popularidad', reportsController.getMenuPopularity);
+router.get('/personal', reportsController.getStaffPerformance);
 
 module.exports = router;

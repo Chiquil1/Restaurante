@@ -1,64 +1,66 @@
-const StaffService = require('../Services/staffService');
-const bcrypt = require('bcrypt');
+const staffModel = require('../Models/staffModel');
 
-// Obtener todo el personal
-exports.getStaff = async (req, res) => {
-  try { 
-    res.json(await StaffService.getAllStaff()); 
-  } catch (e) { 
-    res.status(500).json({ error: e.message }); 
-  }
+exports.getAllStaff = async (req, res) => {
+    try {
+        const staff = await staffModel.getAllStaff();
+        res.json(staff);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
-// Crear empleado con seguridad
+exports.getStaffById = async (req, res) => {
+    try {
+        const staff = await staffModel.getStaffById(req.params.id);
+        if (!staff) return res.status(404).json({ error: 'Personal no encontrado' });
+        res.json(staff);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
 exports.createStaff = async (req, res) => {
-  try {
-    const data = req.body;
-    const salt = await bcrypt.genSalt(10);
-    data.password_hash = await bcrypt.hash(data.password, salt); 
-    delete data.password; 
-    res.status(201).json(await StaffService.createStaff(data));
-  } catch (e) { 
-    res.status(400).json({ error: e.message }); 
-  }
+    try {
+        const staff = await staffModel.createStaff(req.body);
+        res.status(201).json(staff);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
-// Obtener ausencias de un empleado específico
-exports.getAbsences = async (req, res) => {
-  try { 
-    res.json(await StaffService.getEmployeeAbsences(req.params.id)); 
-  } catch (e) { 
-    res.status(500).json({ error: e.message }); 
-  }
+exports.updateStaff = async (req, res) => {
+    try {
+        const staff = await staffModel.updateStaff(req.params.id, req.body);
+        if (!staff) return res.status(404).json({ error: 'Personal no encontrado' });
+        res.json(staff);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
-// Registrar una nueva ausencia
-exports.addAbsence = async (req, res) => {
-  try { 
-    res.status(201).json(await StaffService.addAbsence(req.body)); 
-  } catch (e) { 
-    res.status(400).json({ error: e.message }); 
-  }
+exports.deleteStaff = async (req, res) => {
+    try {
+        const result = await staffModel.deleteStaff(req.params.id);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
-// --- CONTROLADORES PARA LA MATRIZ DE HORARIO ---
-
-// Obtener horarios del mes
-exports.getSchedule = async (req, res) => {
-  try {
-    const { month, year } = req.query;
-    if(!month || !year) return res.status(400).json({ error: "Mes y año son requeridos" });
-    res.json(await StaffService.getMonthlySchedule(month, year));
-  } catch (e) { 
-    res.status(500).json({ error: e.message }); 
-  }
+exports.getAusencias = async (req, res) => {
+    try {
+        const ausencias = await staffModel.getAusencias(req.params.personal_id);
+        res.json(ausencias);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
-// Actualizar un turno la celda la matriz
-exports.updateShift = async (req, res) => {
-  try {
-    res.json(await StaffService.updateShift(req.body));
-  } catch (e) { 
-    res.status(400).json({ error: e.message }); 
-  }
+exports.createAusencia = async (req, res) => {
+    try {
+        const ausencia = await staffModel.createAusencia(req.body);
+        res.status(201).json(ausencia);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };

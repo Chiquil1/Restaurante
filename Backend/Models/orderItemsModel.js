@@ -1,96 +1,53 @@
-const pool = require("../config/Db");
+const pool = require('../config/Db');
 
-/**
- * OrderItemsModel - Gestión de Platos de un Pedido
- * Mejoras: Reducción de consultas mediante RETURNING, manejo de errores ES2022 
- * y sincronización de totales con la orden y la mesa.
- */
-class OrderItems {
-  
-  // 1. Crear un plato en una orden
-  static async createOrderItem(data) {
-    try {
-      const { orderId, menuItemId, nombre, precioUnitario, cantidad, notas } = data;
-      const subtotal = precioUnitario * cantidad;
+exports.getAllOrderItems = async () => {
+    const result = await pool.query(`
+        SELECT oi.*, o.mesa_id, m.nombre as menu_nombre 
+        FROM order_items oi 
+        LEFT JOIN orders o ON oi.order_id = o.id 
+        LEFT JOIN menu m ON oi.menu_item_id = m.id 
+        ORDER BY oi.fecha DESC
+    `);
+    return result.rows;
+};
 
-      const query = `
-        INSERT INTO order_items (order_id, menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, fecha)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-        RETURNING *
-      `;
-      const { rows } = await pool.query(query, [
-        orderId, menuItemId, nombre, precioUnitario, cantidad, subtotal, notas || ''
-      ]);
-      return rows[0];
-    } catch (error) {
-      throw new Error(`Error al crear item de orden: ${error.message}`, { cause: error });
-    }
-  }
+exports.getOrderItemsById = async (id) => {
+    const result = await pool.query('SELECT * FROM order_items WHERE id = $1', [id]);
+    return result.rows[0];
+};
 
-  // 2. Obtener todos los platos de una orden específica
-  static async getOrderItems(orderId) {
-    try {
-      const query = `
-        SELECT oi.*, m.categoria
-        FROM order_items oi
-        LEFT JOIN menu m ON oi.menu_item_id = m.id
-        WHERE oi.order_id = $1
-        ORDER BY oi.fecha ASC
-      `;
-      const { rows } = await pool.query(query, [orderId]);
-      return rows;
-    } catch (error) {
-      throw new Error(`Error al obtener items de la orden ${orderId}: ${error.message}`, { cause: error });
-    }
-  }
+exports.getOrderItemsByOrder = async (order_id) => {
+    const result = await pool.query('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order_id]);
+    return result.rows;
+};
 
-  // 3. Actualizar estado (Súper Optimizado con RETURNING)
-  static async updateItemStatus(id, status) {
-    try {
-      // En lugar de hacer UPDATE y luego SELECT, hacemos todo en uno
-      const query = `UPDATE order_items SET estado = $1 WHERE id = $2 RETURNING *`;
-      const { rows } = await pool.query(query, [status, id]);
-      
-      if (rows.length === 0) throw new Error("Item no encontrado");
-      return rows[0];
-    } catch (error) {
-      throw new Error(`Error al actualizar estado del item: ${error.message}`, { cause: error });
-    }
-  }
+exports.createOrderItem = async (item) => {
+    const { order_id, menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado } = item;
+    const result = await pool.query(
+        `INSERT INTO order_items (order_id, menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [order_id, menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado || 'pendiente']
+    );
+    return result.rows[0];
+};
 
-  // 4. Actualizar cantidad y recalcular subtotal automáticamente en SQL
-  static async updateItemQuantity(id, cantidad) {
-    try {
-      // Calculamos el subtotal directamente en la consulta SQL para evitar un SELECT previo
-      const query = `
-        UPDATE order_items 
-        SET cantidad = $1, 
-            subtotal = precio_unitario * $1 
-        WHERE id = $2 
-        RETURNING *
-      `;
-      const { rows } = await pool.query(query, [cantidad, id]);
-      
-      if (rows.length === 0) throw new Error("Item no encontrado");
-      return rows[0];
-    } catch (error) {
-      throw new Error(`Error al actualizar cantidad: ${error.message}`, { cause: error });
-    }
-  }
+exports.updateOrderItem = async (id, item) => {
+    const { menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado } = item;
+    const result = await pool.query(
+        `UPDATE order_items SET
+            menu_item_id=$1, nombre=$2, precio_unitario=$3, cantidad=$4, subtotal=$5, notas=$6, estado=$7
+        WHERE id=$8 RETURNING *`,
+        [menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado, id]
+    );
+    return result.rows[0];
+};
 
-  // 5. Eliminar item (Súper Optimizado con RETURNING)
-  static async deleteOrderItem(id) {
-    try {
-      // DELETE RETURNING nos devuelve el item borrado sin necesidad de buscarlo antes
-      const query = `DELETE FROM order_items WHERE id = $1 RETURNING *`;
-      const { rows } = await pool.query(query, [id]);
-      
-      if (rows.length === 0) throw new Error("Item no encontrado");
-      return rows[0];
-    } catch (error) {
-      throw new Error(`Error al eliminar item: ${error.message}`, { cause: error });
-    }
-  }
-}
+exports.deleteOrderItem = async (id) => {
+    await pool.query('DELETE FROM order_items WHERE id = $1', [id]);
+    return { message: 'Item eliminado' };
+};
 
-module.exports = OrderItems;
+exports.updateOrderItemStatus = async (id, estado) => {
+    const result = await pool.query('UPDATE order_items SET estado = $1 WHERE id = $2 RETURNING *', [estado, id]);
+    return result.rows[0];
+};

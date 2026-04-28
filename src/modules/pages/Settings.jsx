@@ -5,8 +5,82 @@ import {
   ArrowRightIcon, CreditCardIcon, ClockIcon, EnvelopeIcon, PhoneIcon, MapPinIcon
 } from "@heroicons/react/24/outline";
 
+// --- COMPONENTES REUTILIZABLES (Estilo Glassmorphism) ---
+
+const GlassCard = ({ children, className = "", gradient = null }) => (
+  <div className={`
+    relative overflow-hidden 
+    bg-slate-800/40 backdrop-blur-xl 
+    border border-white/10 
+    rounded-3xl 
+    transition-all duration-300 
+    hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl
+    ${className}
+  `}>
+    {gradient && (
+      <div className={`absolute -right-6 -top-6 w-32 h-32 bg-gradient-to-br ${gradient} opacity-20 blur-3xl rounded-full`} />
+    )}
+    <div className="relative z-10">{children}</div>
+  </div>
+);
+
+const GlassButton = ({ children, variant = "primary", className = "", ...props }) => {
+  const variants = {
+    primary: "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/30",
+    secondary: "bg-white/10 text-white border border-white/10 hover:bg-white/20",
+    danger: "bg-gradient-to-r from-red-500 to-rose-500 text-white shadow-lg shadow-red-500/30",
+    dark: "bg-slate-900 text-white border border-white/10 hover:bg-slate-800",
+  };
+  
+  return (
+    <button 
+      className={`
+        font-bold py-3 px-6 rounded-2xl 
+        hover:scale-105 active:scale-95 
+        transition-all duration-300 flex items-center justify-center gap-2
+        ${variants[variant]}
+        ${className}
+      `}
+      {...props}
+    >
+      {children}
+    </button>
+  );
+};
+
+const InputField = ({ label, icon: Icon, ...props }) => (
+  <div className="flex flex-col gap-1.5">
+    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">{label}</label>
+    <div className="relative group">
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-orange-500 transition-colors">
+        <Icon className="h-5 w-5" />
+      </div>
+      <input
+        {...props}
+        className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-2xl 
+        text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 
+        outline-none transition-all font-medium"
+      />
+    </div>
+  </div>
+);
+
+const ToggleItem = ({ label, active, onToggle }) => (
+  <div className="flex items-center justify-between p-4 bg-slate-900/30 rounded-2xl border border-white/5 hover:bg-slate-900/50 transition-all cursor-pointer group">
+    <span className="font-semibold text-slate-200 group-hover:text-white transition-colors">{label}</span>
+    <button
+      onClick={onToggle}
+      className={`w-12 h-6 rounded-full transition-all relative ${active ? 'bg-gradient-to-r from-orange-500 to-amber-500' : 'bg-slate-700'}`}
+    >
+      <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${active ? 'translate-x-6' : 'translate-x-0'}`} />
+    </button>
+  </div>
+);
+
+// --- COMPONENTE PRINCIPAL ---
+
 export default function Settings() {
-  // --- ESTADOS DE DATOS ---
+  // --- ESTADOS DE DATOS (Mismos que antes) ---
   const [generalSettings, setGeneralSettings] = useState({
     nombreNegocio: "GustoSoft Restaurante",
     moneda: "MXN",
@@ -58,7 +132,7 @@ export default function Settings() {
     setTimeout(() => setMessage({ type: "", text: "" }), 4000);
   };
 
-  // --- CARGA DE DATOS (Sincronizado con Backend Corregido) ---
+  // --- CARGA DE DATOS ---
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -104,7 +178,7 @@ export default function Settings() {
     loadSettings();
   }, []);
 
-  // --- HANDLERS DE GUARDADO ---
+  // --- HANDLERS DE GUARDADO (Mismos que antes) ---
   const handleSaveGeneral = async () => {
     setLoading(true);
     try {
@@ -184,34 +258,6 @@ export default function Settings() {
     } finally { setLoading(false); }
   };
 
-  // --- COMPONENTES DE UI ---
-  const InputField = ({ label, icon: Icon, ...props }) => (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
-      <div className="relative group">
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-orange-500 transition-colors">
-          <Icon className="h-5 w-5" />
-        </div>
-        <input
-          {...props}
-          className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all text-slate-700 font-medium"
-        />
-      </div>
-    </div>
-  );
-
-  const ToggleItem = ({ label, key }) => (
-    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-all cursor-pointer group">
-      <span className="font-semibold text-slate-700 group-hover:text-slate-900 transition-colors">{label}</span>
-      <button
-        onClick={() => setNotificationSettings(prev => ({ ...prev, [key]: !prev[key] }))}
-        className={`w-12 h-6 rounded-full transition-all relative ${notificationSettings[key] ? 'bg-orange-500' : 'bg-slate-300'}`}
-      >
-        <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all ${notificationSettings[key] ? 'translate-x-6' : 'translate-x-0'}`} />
-      </button>
-    </div>
-  );
-
   const sections = [
     { id: "general", title: "General", desc: "Identidad y Horarios", icon: CogIcon },
     { id: "notifications", title: "Notificaciones", desc: "Alertas y Sonidos", icon: BellIcon },
@@ -220,35 +266,36 @@ export default function Settings() {
   ];
 
   return (
-    <div className="p-6 lg:p-10 bg-[#f8fafc] min-h-screen font-sans text-slate-900">
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-4 md:p-8 font-sans selection:bg-orange-500/30">
+      
       {/* TOP HEADER */}
-      <div className="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto mb-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 uppercase italic tracking-tighter flex items-center gap-3">
-            <div className="bg-orange-500 p-2 rounded-lg text-white rotate-3">
+          <h1 className="text-4xl font-black text-white tracking-tight flex items-center gap-3">
+            <div className="bg-gradient-to-br from-orange-500 to-amber-500 p-2.5 rounded-2xl text-white shadow-lg shadow-orange-500/20 rotate-3">
               <CogIcon className="h-8 w-8" />
             </div>
             Ajustes del Sistema
           </h1>
-          <p className="text-slate-500 font-medium mt-1 ml-12">Personaliza la experiencia de GustoSoft POS</p>
+          <p className="text-slate-400 font-medium mt-2 ml-1">Personaliza la experiencia de GustoSoft POS</p>
         </div>
 
         {/* USER QUICK CARD */}
-        <div className="flex items-center gap-4 bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-orange-500 to-yellow-400 flex items-center justify-center text-white font-bold shadow-lg">
+        <GlassCard className="flex items-center gap-4 p-3 pr-6 !rounded-full !hover:translate-y-0 !border-white/5">
+          <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white font-bold shadow-lg">
             {userSettings.nombreUsuario[0]}
           </div>
           <div className="text-left">
-            <p className="text-sm font-bold text-slate-800">{userSettings.nombreUsuario}</p>
-            <p className="text-xs text-slate-500 font-medium">{userSettings.rol}</p>
+            <p className="text-sm font-bold text-white">{userSettings.nombreUsuario}</p>
+            <p className="text-xs text-orange-400 font-medium">{userSettings.rol}</p>
           </div>
-        </div>
+        </GlassCard>
       </div>
 
-      {/* MESSAGE NOTIFICATION */}
+      {/* MESSAGE NOTIFICATION (Glass Style) */}
       {message.text && (
-        <div className={`fixed top-6 right-6 z-50 animate-bounce-in p-4 rounded-2xl border shadow-xl flex items-center gap-3 max-w-sm ${
-          message.type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-rose-50 border-rose-200 text-rose-700"
+        <div className={`fixed top-6 right-6 z-50 animate-bounce-in p-4 rounded-2xl border shadow-2xl backdrop-blur-md flex items-center gap-3 max-w-sm ${
+          message.type === "success" ? "bg-emerald-900/80 border-emerald-500/30 text-emerald-100" : "bg-rose-900/80 border-rose-500/30 text-rose-100"
         }`}>
           {message.type === "success" ? <CheckCircleIcon className="h-6 w-6" /> : <ExclamationTriangleIcon className="h-6 w-6" />}
           <p className="font-bold text-sm">{message.text}</p>
@@ -259,51 +306,51 @@ export default function Settings() {
         
         {/* LEFT SIDEBAR NAVIGATION */}
         <div className="lg:col-span-4 space-y-3">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 ml-2">Menú de Configuración</p>
+          <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4 ml-2">Menú de Configuración</p>
           {sections.map((section) => (
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all group ${
+              className={`w-full p-4 rounded-2xl flex items-center gap-4 transition-all group border ${
                 activeSection === section.id 
-                ? "bg-slate-900 text-white shadow-xl shadow-slate-200 translate-x-2" 
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+                ? "bg-slate-800/80 border-orange-500/30 text-white shadow-lg shadow-orange-900/20 translate-x-1" 
+                : "bg-slate-800/20 border-white/5 text-slate-400 hover:bg-slate-800/60 hover:border-white/10"
               }`}
             >
-              <div className={`p-2 rounded-xl transition-colors ${activeSection === section.id ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:text-orange-500"}`}>
+              <div className={`p-2 rounded-xl transition-all ${activeSection === section.id ? "bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-lg" : "bg-slate-800 text-slate-500 group-hover:text-white"}`}>
                 <section.icon className="h-6 w-6" />
               </div>
               <div className="text-left">
                 <p className="font-bold text-sm">{section.title}</p>
-                <p className={`text-xs ${activeSection === section.id ? "text-slate-400" : "text-slate-400"}`}>{section.desc}</p>
+                <p className={`text-xs ${activeSection === section.id ? "text-orange-400" : "text-slate-500"}`}>{section.desc}</p>
               </div>
-              <ArrowRightIcon className={`h-4 w-4 ml-auto transition-transform ${activeSection === section.id ? "translate-x-0 opacity-100" : "-translate-x-2 opacity-0"}`} />
+              <ArrowRightIcon className={`h-4 w-4 ml-auto transition-all ${activeSection === section.id ? "translate-x-0 opacity-100 text-orange-500" : "-translate-x-2 opacity-0"}`} />
             </button>
           ))}
 
           {/* SUPPORT MINI CARD */}
-          <div className="mt-10 p-6 bg-gradient-to-br from-orange-500 to-orange-600 rounded-3xl text-white relative overflow-hidden shadow-lg shadow-orange-200">
+          <div className="mt-8 p-6 bg-gradient-to-br from-orange-600 to-rose-600 rounded-3xl text-white relative overflow-hidden shadow-xl shadow-orange-900/40 group hover:scale-[1.02] transition-transform">
             <div className="relative z-10">
               <h4 className="font-black italic text-lg mb-2">¿Soporte Técnico?</h4>
               <p className="text-orange-100 text-xs mb-4 opacity-80">Estamos disponibles 24/7 para ayudarte.</p>
-              <button className="w-full py-2 bg-white text-orange-600 rounded-xl font-bold text-xs hover:bg-orange-50 transition-colors">
+              <button className="w-full py-2 bg-white/20 backdrop-blur-sm border border-white/20 text-white rounded-xl font-bold text-xs hover:bg-white/30 transition-colors">
                 Contactar Soporte
               </button>
             </div>
-            <FireIcon className="absolute -right-4 -bottom-4 h-24 w-24 text-white/20 rotate-12" />
+            <FireIcon className="absolute -right-4 -bottom-4 h-32 w-32 text-white/10 rotate-12 group-hover:rotate-0 transition-transform duration-500" />
           </div>
         </div>
 
         {/* RIGHT MAIN CONTENT */}
         <div className="lg:col-span-8">
-          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-8 min-h-[600px] transition-all">
+          <GlassCard className="p-8 min-h-[600px]" gradient="from-blue-500 to-indigo-500">
             
             {/* GENERAL SECTION */}
             {activeSection === "general" && (
               <div className="animate-fade-in space-y-8">
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
                   <CogIcon className="h-8 w-8 text-orange-500" />
-                  <h2 className="text-2xl font-black text-slate-800 uppercase italic">Configuración General</h2>
+                  <h2 className="text-2xl font-black text-white uppercase italic">Configuración General</h2>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
@@ -313,18 +360,21 @@ export default function Settings() {
                     onChange={e => setGeneralSettings({...generalSettings, nombreNegocio: e.target.value})}
                   />
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Moneda</label>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Moneda</label>
                     <div className="relative group">
-                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-orange-500 transition-colors">
+                      <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-orange-500 transition-colors">
                         <CreditCardIcon className="h-5 w-5" />
                       </div>
                       <select
                         value={generalSettings.moneda}
                         onChange={e => setGeneralSettings({...generalSettings, moneda: e.target.value})}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all text-slate-700 font-medium"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-2xl 
+                        text-white focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 
+                        outline-none transition-all font-medium appearance-none"
                       >
                         <option>MXN</option><option>USD</option><option>EUR</option>
                       </select>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">▼</div>
                     </div>
                   </div>
                   <InputField 
@@ -349,51 +399,47 @@ export default function Settings() {
                   />
                 </div>
 
-                <button
-                  onClick={handleSaveGeneral}
-                  disabled={loading}
-                  className="w-full mt-8 py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all active:scale-95 disabled:bg-slate-400 shadow-xl shadow-slate-200"
-                >
-                  {loading ? "Guardando..." : "💾 Guardar Cambios Generales"}
-                </button>
+                <div className="pt-4">
+                  <GlassButton onClick={handleSaveGeneral} disabled={loading} className="w-full">
+                    {loading ? "Guardando..." : "💾 Guardar Cambios Generales"}
+                  </GlassButton>
+                </div>
               </div>
             )}
 
             {/* NOTIFICATIONS SECTION */}
             {activeSection === "notifications" && (
               <div className="animate-fade-in space-y-8">
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
                   <BellIcon className="h-8 w-8 text-orange-500" />
-                  <h2 className="text-2xl font-black text-slate-800 uppercase italic">Preferencias de Alertas</h2>
+                  <h2 className="text-2xl font-black text-white uppercase italic">Preferencias de Alertas</h2>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <ToggleItem label="Alertas de Preparación" key="alertasPreparacion" />
-                  <ToggleItem label="Alertas de Stock Bajo" key="alertasStock" />
-                  <ToggleItem label="Alertas de Reservas" key="alertasReservas" />
-                  <ToggleItem label="Notificación Admin Email" key="correoAdminOrden" />
-                  <ToggleItem label="Aviso Sonoro Activo" key="avisoSonoro" />
+                  <ToggleItem label="Alertas de Preparación" active={notificationSettings.alertasPreparacion} onToggle={() => setNotificationSettings(prev => ({ ...prev, alertasPreparacion: !prev.alertasPreparacion }))} />
+                  <ToggleItem label="Alertas de Stock Bajo" active={notificationSettings.alertasStock} onToggle={() => setNotificationSettings(prev => ({ ...prev, alertasStock: !prev.alertasStock }))} />
+                  <ToggleItem label="Alertas de Reservas" active={notificationSettings.alertasReservas} onToggle={() => setNotificationSettings(prev => ({ ...prev, alertasReservas: !prev.alertasReservas }))} />
+                  <ToggleItem label="Notificación Admin Email" active={notificationSettings.correoAdminOrden} onToggle={() => setNotificationSettings(prev => ({ ...prev, correoAdminOrden: !prev.correoAdminOrden }))} />
+                  <ToggleItem label="Aviso Sonoro Activo" active={notificationSettings.avisoSonoro} onToggle={() => setNotificationSettings(prev => ({ ...prev, avisoSonoro: !prev.avisoSonoro }))} />
                 </div>
 
-                <button
-                  onClick={handleSaveNotifications}
-                  disabled={loading}
-                  className="w-full mt-8 py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all active:scale-95 disabled:bg-slate-400"
-                >
-                  {loading ? "Guardando..." : "🔔 Guardar Notificaciones"}
-                </button>
+                <div className="pt-4">
+                  <GlassButton onClick={handleSaveNotifications} disabled={loading} className="w-full">
+                    {loading ? "Guardando..." : "🔔 Guardar Notificaciones"}
+                  </GlassButton>
+                </div>
               </div>
             )}
 
             {/* SECURITY SECTION */}
             {activeSection === "security" && (
               <div className="animate-fade-in space-y-8">
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
                   <ShieldCheckIcon className="h-8 w-8 text-orange-500" />
-                  <h2 className="text-2xl font-black text-slate-800 uppercase italic">Seguridad de Cuenta</h2>
+                  <h2 className="text-2xl font-black text-white uppercase italic">Seguridad de Cuenta</h2>
                 </div>
                 
-                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 space-y-6">
+                <GlassCard className="p-6 bg-slate-900/40 !border-white/5 !hover:translate-y-0" gradient="from-purple-500 to-pink-500">
                   <div className="grid grid-cols-1 gap-6">
                     <InputField 
                       label="Contraseña Actual" icon={ShieldCheckIcon} type="password"
@@ -409,7 +455,7 @@ export default function Settings() {
                       />
                       <button 
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-11 text-slate-400 hover:text-orange-500"
+                        className="absolute right-3 top-10 text-slate-500 hover:text-orange-500 transition-colors"
                       >
                         {showPassword ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
                       </button>
@@ -420,40 +466,38 @@ export default function Settings() {
                       onChange={e => setSecuritySettings({...securitySettings, passwordConfirmar: e.target.value})}
                     />
                   </div>
-                </div>
+                </GlassCard>
 
-                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center justify-between">
+                <div className="p-4 bg-blue-900/20 rounded-2xl border border-blue-500/20 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <ShieldCheckIcon className="h-6 w-6 text-blue-600" />
+                    <ShieldCheckIcon className="h-6 w-6 text-blue-400" />
                     <div>
-                      <p className="text-sm font-bold text-blue-900">Autenticación 2FA</p>
-                      <p className="text-xs text-blue-700 opacity-70">Añade seguridad extra a tu acceso</p>
+                      <p className="text-sm font-bold text-blue-100">Autenticación 2FA</p>
+                      <p className="text-xs text-blue-300/70">Añade seguridad extra a tu acceso</p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSecuritySettings(prev => ({...prev, autenticacionDosFactores: !prev.autenticacionDosFactores}))}
-                    className={`w-12 h-6 rounded-full transition-all relative ${securitySettings.autenticacionDosFactores ? 'bg-blue-600' : 'bg-slate-300'}`}
+                    className={`w-12 h-6 rounded-full transition-all relative ${securitySettings.autenticacionDosFactores ? 'bg-blue-500' : 'bg-slate-700'}`}
                   >
-                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all ${securitySettings.autenticacionDosFactores ? 'translate-x-6' : 'translate-x-0'}`} />
+                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${securitySettings.autenticacionDosFactores ? 'translate-x-6' : 'translate-x-0'}`} />
                   </button>
                 </div>
 
-                <button
-                  onClick={handleChangePassword}
-                  disabled={loading}
-                  className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all active:scale-95"
-                >
-                  {loading ? "Actualizando..." : "🔐 Actualizar Credenciales"}
-                </button>
+                <div className="pt-4">
+                  <GlassButton onClick={handleChangePassword} disabled={loading} className="w-full">
+                    {loading ? "Actualizando..." : "🔐 Actualizar Credenciales"}
+                  </GlassButton>
+                </div>
               </div>
             )}
 
             {/* BRANCH SECTION */}
             {activeSection === "branch" && (
               <div className="animate-fade-in space-y-8">
-                <div className="flex items-center gap-3 mb-6">
+                <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
                   <GlobeAltIcon className="h-8 w-8 text-orange-500" />
-                  <h2 className="text-2xl font-black text-slate-800 uppercase italic">Datos de Sucursal</h2>
+                  <h2 className="text-2xl font-black text-white uppercase italic">Datos de Sucursal</h2>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -487,30 +531,28 @@ export default function Settings() {
                   />
                 </div>
 
-                <div className="p-6 bg-slate-900 rounded-3xl text-white flex items-center justify-between shadow-xl">
+                <GlassCard className="p-6 flex items-center justify-between !bg-slate-900/80 !border-white/10" gradient="from-emerald-500 to-teal-500">
                   <div>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Último Backup de BD</p>
-                    <p className="text-lg font-mono font-bold text-orange-400">{branchSettings.ultimoBackup}</p>
+                    <p className="text-lg font-mono font-bold text-emerald-400">{branchSettings.ultimoBackup}</p>
                   </div>
                   <button
                     onClick={handleBackup}
                     disabled={loading}
-                    className="px-6 py-3 bg-orange-500 hover:bg-orange-600 rounded-xl font-bold text-sm transition-all active:scale-95"
+                    className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-emerald-500/30 text-white"
                   >
                     {loading ? "Procesando..." : "☁️ Crear Backup"}
                   </button>
-                </div>
+                </GlassCard>
 
-                <button
-                  onClick={handleSaveBranch}
-                  disabled={loading}
-                  className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all active:scale-95"
-                >
-                  {loading ? "Guardando..." : "💾 Guardar Datos de Sucursal"}
-                </button>
+                <div className="pt-4">
+                  <GlassButton onClick={handleSaveBranch} disabled={loading} className="w-full">
+                    {loading ? "Guardando..." : "💾 Guardar Datos de Sucursal"}
+                  </GlassButton>
+                </div>
               </div>
             )}
-          </div>
+          </GlassCard>
         </div>
       </div>
 

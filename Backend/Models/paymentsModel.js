@@ -1,64 +1,53 @@
-const pool = require("../config/Db");
+const pool = require('../config/Db');
 
-class Payments {
-  // Registrar un nuevo pago y actualizar la venta (Atomicidad con Transacción)
-  static async createPayment(data) {
-    const { venta_id, monto, metodo_pago, notas, usuario_id } = data;
-    
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+exports.getAllPayments = async () => {
+    const result = await pool.query(`
+        SELECT p.*, v.total as venta_total, u.nombre as usuario_nombre 
+        FROM pagos p 
+        LEFT JOIN ventas v ON p.venta_id = v.id 
+        LEFT JOIN personal u ON p.usuario_id = u.id 
+        ORDER BY p.fecha DESC
+    `);
+    return result.rows;
+};
 
-      // 1. Insertar el pago
-      const paymentQuery = `
-        INSERT INTO pagos (venta_id, monto, metodo_pago, notas, usuario_id)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-      `;
-      const { rows: paymentResult } = await client.query(paymentQuery, [venta_id, monto, metodo_pago, notas, usuario_id]);
-      const payment = paymentResult[0];
+exports.getPaymentById = async (id) => {
+    const result = await pool.query('SELECT * FROM pagos WHERE id = $1', [id]);
+    return result.rows[0];
+};
 
-      // 2. Calcular el total pagado hasta ahora para esta venta
-      const totalPagadoQuery = `SELECT SUM(monto) as total FROM pagos WHERE venta_id = $1`;
-      const { rows: sumResult } = await client.query(totalPagadoQuery, [venta_id]);
-      const totalPagado = parseFloat(sumResult[0].total || 0);
+exports.createPayment = async (payment) => {
+    const { venta_id, monto, metodo_pago, notas, usuario_id } = payment;
+    const result = await pool.query(
+        `INSERT INTO pagos (venta_id, monto, metodo_pago, notas, usuario_id)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [venta_id, monto, metodo_pago, notas, usuario_id]
+    );
+    return result.rows[0];
+};
 
-      // 3. Obtener el total de la venta original
-      const ventaQuery = `SELECT total FROM ventas WHERE id = $1`;
-      const { rows: ventaResult } = await client.query(ventaQuery, [venta_id]);
-      const totalVenta = parseFloat(ventaResult[0].total);
+exports.updatePayment = async (id, payment) => {
+    const { venta_id, monto, metodo_pago, notas, usuario_id } = payment;
+    const result = await pool.query(
+        `UPDATE pagos SET
+            venta_id=$1, monto=$2, metodo_pago=$3, notas=$4, usuario_id=$5
+        WHERE id=$6 RETURNING *`,
+        [venta_id, monto, metodo_pago, notas, usuario_id, id]
+    );
+    return result.rows[0];
+};
 
-      // 4. Calcular saldo y determinar estado
-      const nuevoSaldo = totalVenta - totalPagado;
-      const nuevoEstado = nuevoSaldo <= 0 ? 'completada' : (nuevoSaldo < totalVenta ? 'parcial' : 'pendiente');
+exports.deletePayment = async (id) => {
+    await pool.query('DELETE FROM pagos WHERE id = $1', [id]);
+    return { message: 'Pago eliminado' };
+};
 
-      // 5. Actualizar la tabla ventas
-      await client.query(
-        `UPDATE ventas SET saldo_pendiente = $1, estado = $2, metodo_pago = $3 WHERE id = $4`,
-        [nuevoSaldo, nuevoEstado, metodo_pago, venta_id]
-      );
+exports.getPaymentsBySale = async (venta_id) => {
+    const result = await pool.query('SELECT * FROM pagos WHERE venta_id = $1 ORDER BY fecha', [venta_id]);
+    return result.rows;
+};
 
-      await client.query('COMMIT');
-      return payment;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
-
-  static async getPaymentsBySale(venta_id) {
-    const query = `SELECT * FROM pagos WHERE venta_id = $1 ORDER BY fecha DESC`;
-    const { rows } = await pool.query(query, [venta_id]);
-    return rows;
-  }
-
-  static async getSaleBalance(venta_id) {
-    const query = `SELECT total, saldo_pendiente, estado FROM ventas WHERE id = $1`;
-    const { rows } = await pool.query(query, [venta_id]);
-    return rows[0];
-  }
-}
-
-module.exports = Payments;
+exports.getTotalPayments = async () => {
+    const result = await pool.query('SELECT SUM(monto) as total FROM pagos');
+    return result.rows[0];
+};

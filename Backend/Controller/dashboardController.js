@@ -1,37 +1,66 @@
-const pool = require('../config/Db');
+const dashboardModel = require('../Models/dashboardModel');
 
-const getDashboardStats = async (req, res) => {
-  try {
-    // Ejecutamos todas las consultas en paralelo para máxima velocidad
-    const results = await Promise.all([
-      // 1. Ventas hoy
-      pool.query(`SELECT COALESCE(SUM(total), 0) as total FROM ventas WHERE DATE(fecha) = CURRENT_DATE AND estado = 'completada'`),
-      
-      // 2. Clientes hoy (Reservas)
-      pool.query(`SELECT COUNT(*) as total FROM reservations WHERE DATE(fecha) = CURRENT_DATE`),
-      
-      // 3. Pedidos Activos -> CORREGIDO: 'status' cambiado a 'estado'
-      pool.query(`SELECT COUNT(*) as total FROM orders WHERE estado NOT IN ('pagado','completado','cancelado')`),
-      
-      // 4. Mesas Ocupadas
-      pool.query(`SELECT COUNT(*) as total FROM mesas WHERE estado != 'libre'`),
-      
-      // 5. Total de Mesas
-      pool.query(`SELECT COUNT(*) as total FROM mesas`)
-    ]);
-
-    return res.json({
-      // Usamos parseFloat para las ventas porque es dinero, y Number para los conteos
-      ventasHoy: parseFloat(results[0].rows[0].total || 0),
-      clientesHoy: Number(results[1].rows[0].total),
-      pedidosActivos: Number(results[2].rows[0].total),
-      mesasOcupadas: Number(results[3].rows[0].total),
-      totalMesas: Number(results[4].rows[0].total),
-    });
-  } catch (error) {
-    console.error("DASHBOARD_ERROR:", error);
-    res.status(500).json({ error: "Error al procesar estadísticas" });
-  }
+exports.getVentasHoy = async (req, res) => {
+    try {
+        const result = await dashboardModel.getVentasHoy();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
 };
 
-module.exports = { getDashboardStats };
+exports.getClientesHoy = async (req, res) => {
+    try {
+        const result = await dashboardModel.getClientesHoy();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getPedidosActivos = async (req, res) => {
+    try {
+        const result = await dashboardModel.getPedidosActivos();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getMesasOcupadas = async (req, res) => {
+    try {
+        const result = await dashboardModel.getMesasOcupadas();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getTotalMesas = async (req, res) => {
+    try {
+        const result = await dashboardModel.getTotalMesas();
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getDashboardSummary = async (req, res) => {
+    try {
+        const ventasHoy = await dashboardModel.getVentasHoy();
+        const clientesHoy = await dashboardModel.getClientesHoy();
+        const pedidosActivos = await dashboardModel.getPedidosActivos();
+        const mesasOcupadas = await dashboardModel.getMesasOcupadas();
+        const totalMesas = await dashboardModel.getTotalMesas();
+        
+        res.json({
+            ventasHoy: ventasHoy.total,
+            clientesHoy: clientesHoy.total,
+            pedidosActivos: pedidosActivos.total,
+            mesasOcupadas: mesasOcupadas.total,
+            totalMesas: totalMesas.total
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};

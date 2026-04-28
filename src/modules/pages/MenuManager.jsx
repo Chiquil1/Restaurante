@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { 
+  PlusIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  CheckIcon, 
+  XMarkIcon, 
+  ClockIcon 
+} from '@heroicons/react/24/outline';
+
+// IMPORTACIONES OBLIGATORIAS SEGÚN REGLAS
+import GlassCard from "../../components/GlassCard";
+import GlassButton from "../../components/GlassButton";
 import { MenuService } from "../../Services/Api";
- // Importamos el servicio corregido
+
+// --- Estilos de Inputs Consistentes ---
+const inputClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all";
+const labelClass = "block text-sm font-bold text-slate-300 mb-1.5 ml-1";
 
 export default function MenuManager() {
   const [items, setItems] = useState([]);
@@ -13,33 +27,32 @@ export default function MenuManager() {
   const [success, setSuccess] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
 
-  const [formData, setFormData] = useState({
+  const initialFormState = {
     nombre: '',
     descripcion: '',
     categoria: '',
-    precio: 0,
+    precio: '',
     ingredientes: '',
-    tiempoPreparacion: 0,
+    tiempoPreparacion: '',
     disponible: true,
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
 
   useEffect(() => {
     fetchCategories();
-  }, []);
-
-  useEffect(() => {
     fetchMenuItems();
   }, [filterCategory]);
 
-  // --- OPERACIONES DE DATOS ---
-
+  // --- Lógica de Conexión con Backend (API) ---
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
-      const data = await MenuService.getItems(filterCategory);
+      const filters = filterCategory ? { categoria: filterCategory } : {};
+      const data = await MenuService.getAll(filters);
       setItems(data);
     } catch (err) {
-      setError(err.message || 'Error al cargar el menú');
+      setError(err.response?.data?.error || 'Error al cargar el menú');
     } finally {
       setLoading(false);
     }
@@ -64,158 +77,252 @@ export default function MenuManager() {
         await MenuService.create(formData);
         setSuccess('Plato creado exitosamente');
       }
-      setShowForm(false);
-      setEditingId(null);
-      resetForm();
+      handleCloseForm();
       fetchMenuItems();
     } catch (err) {
-      setError(err.message || 'Error al guardar el plato');
+      setError(err.response?.data?.error || 'Error al guardar el plato');
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('¿Estás seguro de que deseas eliminar este plato?')) {
+    if (window.confirm('¿Estás seguro de eliminar este plato? Esta acción no se puede deshacer.')) {
       try {
         await MenuService.delete(id);
         setSuccess('Plato eliminado');
         fetchMenuItems();
       } catch (err) {
-        setError(err.message || 'Error al eliminar');
+        setError(err.response?.data?.error || 'Error al eliminar');
       }
     }
   };
 
-  // --- UTILIDADES ---
-
-  const resetForm = () => {
-    setFormData({
-      nombre: '', descripcion: '', categoria: '', precio: 0,
-      ingredientes: '', tiempoPreparacion: 0, disponible: true,
-    });
-  };
-
   const handleEdit = (item) => {
-    setFormData(item);
+    setFormData({
+      ...item,
+      precio: item.precio.toString(),
+      tiempoPreparacion: item.tiempo_preparacion ? item.tiempo_preparacion.toString() : ''
+    });
     setEditingId(item.id);
     setShowForm(true);
   };
 
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setFormData(initialFormState);
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
   return (
-    <div className="space-y-6 p-4">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Gestor de Menú</h1>
-        <button
-          onClick={() => { resetForm(); setEditingId(null); setShowForm(!showForm); }}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm"
-        >
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-4 md:p-8 font-sans">
+      
+      {/* --- Header --- */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
+        <div>
+          <h1 className="text-4xl font-black text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-amber-500">
+            Gestor de Menú
+          </h1>
+          <p className="text-slate-400 mt-2 text-lg">Administra tus platos y categorías con estilo premium.</p>
+        </div>
+        <GlassButton onClick={() => setShowForm(true)} variant="primary">
           <PlusIcon className="w-5 h-5" />
           Nuevo Plato
-        </button>
+        </GlassButton>
       </div>
 
-      {/* Alertas */}
+      {/* --- Alertas --- */}
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded shadow-sm flex justify-between items-center">
-          <div className="flex items-center gap-2"><XMarkIcon className="w-5 h-5" /> {error}</div>
-          <button onClick={() => setError('')} className="font-bold">X</button>
-        </div>
+        <GlassCard className="mb-6 border-l-4 border-l-red-500 bg-red-900/20">
+          <div className="p-4 flex justify-between items-center">
+            <div className="flex items-center gap-3 text-red-200">
+              <XMarkIcon className="w-6 h-6" /> 
+              <span className="font-bold">{error}</span>
+            </div>
+            <button onClick={() => setError('')} className="text-red-400 hover:text-white transition">✕</button>
+          </div>
+        </GlassCard>
       )}
       {success && (
-        <div className="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded shadow-sm flex justify-between items-center">
-          <div className="flex items-center gap-2"><CheckIcon className="w-5 h-5" /> {success}</div>
-          <button onClick={() => setSuccess('')} className="font-bold">X</button>
-        </div>
+        <GlassCard className="mb-6 border-l-4 border-l-emerald-500 bg-emerald-900/20">
+          <div className="p-4 flex justify-between items-center">
+            <div className="flex items-center gap-3 text-emerald-200">
+              <CheckIcon className="w-6 h-6" /> 
+              <span className="font-bold">{success}</span>
+            </div>
+            <button onClick={() => setSuccess('')} className="text-emerald-400 hover:text-white transition">✕</button>
+          </div>
+        </GlassCard>
       )}
 
-      {/* Filtro */}
-      <div className="flex items-center gap-4 bg-white p-4 rounded-lg shadow-sm w-fit">
-        <label className="text-sm font-semibold text-slate-700">
+      {/* --- Filtros --- */}
+      <GlassCard className="mb-8 p-4 flex flex-col md:flex-row items-center gap-4">
+        <label className="text-sm font-bold text-slate-300 uppercase tracking-wider">
           Filtrar por categoría:
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="ml-2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            <option value="">Todas las categorías</option>
-            {categories.map((cat) => (
-              <option key={cat.categoria} value={cat.categoria}>{cat.categoria}</option>
-            ))}
-          </select>
         </label>
-      </div>
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className={`${inputClass} w-full md:w-auto cursor-pointer`}
+        >
+          <option value="">Todas las categorías</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+      </GlassCard>
 
-      {/* Formulario */}
+      {/* --- Formulario (Modal Inline) --- */}
       {showForm && (
-        <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-100 animate-in fade-in zoom-in duration-200">
-          <h2 className="text-xl font-semibold mb-4">{editingId ? 'Editar Plato' : 'Nuevo Plato'}</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <GlassCard gradient="from-orange-500 to-amber-500" className="mb-8 p-8 animate-in fade-in slide-in-from-top-8 duration-300">
+          <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+            <h2 className="text-2xl font-bold text-white">
+              {editingId ? 'Editar Plato' : 'Crear Nuevo Plato'}
+            </h2>
+            <button onClick={handleCloseForm} className="text-slate-400 hover:text-white transition">
+              <XMarkIcon className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700">Nombre</label>
-                <input type="text" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} className="mt-1 w-full p-2 border rounded-lg" required />
+                <label className={labelClass}>Nombre del Plato</label>
+                <input 
+                  name="nombre" type="text" value={formData.nombre} onChange={handleInputChange}
+                  className={inputClass} required placeholder="Ej. Hamburguesa Royal"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Categoría</label>
-                <input list="catList" value={formData.categoria} onChange={(e) => setFormData({...formData, categoria: e.target.value})} className="mt-1 w-full p-2 border rounded-lg" required />
-                <datalist id="catList">{categories.map(c => <option key={c.categoria} value={c.categoria} />)}</datalist>
+                <label className={labelClass}>Categoría</label>
+                <input 
+                  name="categoria" list="catList" value={formData.categoria} onChange={handleInputChange}
+                  className={inputClass} required placeholder="Ej. Principal"
+                />
+                <datalist id="catList">
+                  {categories.map(c => <option key={c} value={c} />)}
+                </datalist>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Precio ($)</label>
-                <input type="number" step="0.01" value={formData.precio} onChange={(e) => setFormData({...formData, precio: parseFloat(e.target.value)})} className="mt-1 w-full p-2 border rounded-lg" required />
+                <label className={labelClass}>Precio ($)</label>
+                <input 
+                  name="precio" type="number" step="0.01" min="0" value={formData.precio} onChange={handleInputChange}
+                  className={inputClass} required placeholder="0.00"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Tiempo Prep. (min)</label>
-                <input type="number" value={formData.tiempoPreparacion} onChange={(e) => setFormData({...formData, tiempoPreparacion: parseInt(e.target.value)})} className="mt-1 w-full p-2 border rounded-lg" />
+                <label className={labelClass}>Tiempo Prep. (min)</label>
+                <input 
+                  name="tiempoPreparacion" type="number" min="0" value={formData.tiempoPreparacion} onChange={handleInputChange}
+                  className={inputClass} placeholder="0"
+                />
               </div>
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700">Descripción</label>
-              <textarea value={formData.descripcion} onChange={(e) => setFormData({...formData, descripcion: e.target.value})} className="mt-1 w-full p-2 border rounded-lg" rows="2" />
+              <label className={labelClass}>Descripción</label>
+              <textarea 
+                name="descripcion" value={formData.descripcion} onChange={handleInputChange}
+                className={`${inputClass} h-24`} placeholder="Detalles del plato..."
+              />
             </div>
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700">Ingredientes</label>
-              <textarea value={formData.ingredientes} onChange={(e) => setFormData({...formData, ingredientes: e.target.value})} className="mt-1 w-full p-2 border rounded-lg" rows="2" />
+              <label className={labelClass}>Ingredientes / Alérgenos</label>
+              <textarea 
+                name="ingredientes" value={formData.ingredientes} onChange={handleInputChange}
+                className={`${inputClass} h-24`} placeholder="Separados por comas..."
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <input type="checkbox" checked={formData.disponible} onChange={(e) => setFormData({...formData, disponible: e.target.checked})} className="w-4 h-4" />
-              <span className="text-sm font-medium">Disponible para venta</span>
+
+            <div className="flex items-center gap-4 p-4 bg-slate-900/30 rounded-2xl border border-white/5">
+              <input 
+                type="checkbox" name="disponible" id="disponible"
+                checked={formData.disponible} onChange={handleInputChange}
+                className="w-6 h-6 text-orange-500 rounded focus:ring-orange-500/20 bg-slate-700 border-white/10" 
+              />
+              <label htmlFor="disponible" className="text-lg font-bold text-white select-none cursor-pointer">
+                Disponible para venta
+              </label>
             </div>
-            <div className="flex gap-2 pt-4">
-              <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">Guardar Plato</button>
-              <button type="button" onClick={() => {setShowForm(false); setEditingId(null);}} className="bg-gray-200 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-300 transition">Cancelar</button>
+
+            <div className="flex gap-4 pt-4 border-t border-white/10">
+              <GlassButton type="submit" variant="primary" className="flex-1">
+                {editingId ? 'Actualizar Plato' : 'Guardar Plato'}
+              </GlassButton>
+              <GlassButton type="button" variant="secondary" onClick={handleCloseForm}>
+                Cancelar
+              </GlassButton>
             </div>
           </form>
-        </div>
+        </GlassCard>
       )}
 
-      {/* Lista de Platos */}
+      {/* --- Grid de Platos --- */}
       {loading ? (
-        <div className="text-center py-10 text-gray-500">Cargando platos del menú...</div>
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
+          <p className="font-bold tracking-widest uppercase">Cargando menú...</p>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {items.map((item) => (
-            <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-bold text-lg text-gray-800">{item.nombre}</h3>
-                  <span className="text-xs font-medium text-blue-500 uppercase">{item.categoria}</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {items.length === 0 ? (
+            <GlassCard className="col-span-full text-center py-20 border-dashed">
+              <p className="text-slate-400 text-lg">No se encontraron platos.</p>
+            </GlassCard>
+          ) : (
+            items.map((item) => (
+              <GlassCard key={item.id} className="p-6 flex flex-col h-full group">
+                <div className="flex justify-between items-start mb-4">
+                  <span className="text-xs font-black text-orange-400 bg-orange-500/10 px-3 py-1 rounded-full uppercase tracking-wider border border-orange-500/20">
+                    {item.categoria}
+                  </span>
+                  {!item.disponible && (
+                    <span className="bg-red-500/20 text-red-400 text-[10px] font-black px-2 py-1 rounded-full uppercase border border-red-500/20">
+                      Agotado
+                    </span>
+                  )}
                 </div>
-                {!item.disponible && <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded uppercase">Agotado</span>}
-              </div>
-              <p className="text-gray-500 text-sm my-2 line-clamp-2">{item.descripcion}</p>
-              <div className="flex justify-between items-center mt-4">
-                <div>
-                  <span className="text-xl font-bold text-gray-900">${item.precio}</span>
-                  <span className="ml-2 text-xs text-gray-400">{item.tiempo_preparacion} min</span>
+                
+                <h3 className="font-black text-xl text-white mb-2 group-hover:text-orange-400 transition-colors">{item.nombre}</h3>
+                <p className="text-slate-400 text-sm mb-6 line-clamp-2 flex-grow">{item.descripcion || 'Sin descripción disponible'}</p>
+                
+                <div className="flex justify-between items-end mt-auto pt-4 border-t border-white/10">
+                  <div>
+                    <span className="text-2xl font-black text-white tracking-tight">${Number(item.precio).toFixed(2)}</span>
+                    {item.tiempo_preparacion && (
+                      <div className="flex items-center gap-1 text-xs text-slate-500 mt-1 font-medium">
+                        <ClockIcon className="w-3 h-3" /> {item.tiempo_preparacion} min
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleEdit(item)} 
+                      className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl transition"
+                      title="Editar"
+                    >
+                      <PencilIcon className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(item.id)} 
+                      className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition"
+                      title="Eliminar"
+                    >
+                      <TrashIcon className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button onClick={() => handleEdit(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition"><PencilIcon className="w-4 h-4" /></button>
-                  <button onClick={() => handleDelete(item.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-full transition"><TrashIcon className="w-4 h-4" /></button>
-                </div>
-              </div>
-            </div>
-          ))}
+              </GlassCard>
+            ))
+          )}
         </div>
       )}
     </div>

@@ -1,43 +1,17 @@
 const express = require('express');
 const router = express.Router();
+const tablesController = require('../Controller/tablesController');
 
-// Importamos el controlador que acabamos de crear
-const controller = require('../Controller/tablesController');
+// 1. Rutas Estáticas PRIMERO (Para evitar que Express confunda 'waiters' con un ID)
+router.get('/waiters', tablesController.getWaiters);
 
-/**
- * RUTAS DE MESAS
- * Estas rutas se montan en el server.js bajo la ruta "/api"
- * Por lo tanto, la URL completa será http://localhost:3000/api/mesas, etc.
- */
+// 2. Rutas Dinámicas DESPUÉS
+router.get('/', tablesController.getAllTables);
+router.get('/:id', tablesController.getTableById);
 
-// --- Gestión de Mesas ---
-
-// Obtener todas las mesas (Sincronizado con TableService.getAll)
-router.get('/mesas', controller.getMesasHandler);
-
-// Crear una nueva mesa (Sincronizado con TableService.create)
-router.post('/mesas', controller.createMesaHandler);
-
-// Actualizar datos de la mesa (Sincronizado con TableService.update)
-router.put('/mesas/:id', controller.updateMesaHandler);
-
-// Cambiar estado de la mesa (Sincronizado con TableService.updateStatus)
-// Usamos PATCH porque es una actualización parcial (solo el estado)
-router.patch('/mesas/:id/estado', controller.updateEstadoHandler);
-
-// Asignar Mesero y Cliente (Sincronizado con TableService.assignWaiter)
-router.patch('/mesas/:id/mesero', controller.updateMeseroHandler);
-
-// Proceso de Cobro / Salida (Sincronizado con TableService.checkout)
-router.post('/mesas/:id/checkout', controller.checkoutHandler);
-
-// Eliminar una mesa (Sincronizado con TableService.delete)
-router.delete('/mesas/:id', controller.deleteMesaHandler);
-
-
-// --- Gestión de Personal/Meseros ---
-
-// Obtener lista de meseros para el dropdown (Sincronizado con TableService.getWaiters)
-router.get('/meseros', controller.getMeserosHandler);
+// 3. Métodos de escritura
+router.post('/', tablesController.createTable);
+router.put('/:id', tablesController.updateTable);
+router.delete('/:id', tablesController.deleteTable);
 
 module.exports = router;
