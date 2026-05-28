@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ausencias {
+  id           Int       @id @default(autoincrement())
+  personal_id  Int?
+  tipo         String?   @db.VarChar(50)
+  fecha_inicio DateTime? @db.Date
+  fecha_fin    DateTime? @db.Date
+  motivo       String?
+}
+
+model backups {
+  id           Int       @id @default(autoincrement())
+  sucursal_id  Int?
+  fecha_backup DateTime? @default(now()) @db.Timestamp(6)
+  tipo_backup  String?   @db.VarChar(50)
+  estado       String?   @db.VarChar(50)
+}
+
+model configuracion_general {
+  id                  Int       @id @default(autoincrement())
+  nombrenegocio       String?   @db.VarChar(255)
+  moneda              String?   @db.VarChar(10)
+  horario_apertura    DateTime? @db.Time(6)
+  horario_cierre      DateTime? @db.Time(6)
+  telefono            String?   @db.VarChar(20)
+  email               String?   @db.VarChar(255)
+  fecha_actualizacion DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model menu {
+  id                 Int           @id @default(autoincrement())
+  nombre             String        @db.VarChar(255)
+  descripcion        String?
+  categoria          String?       @db.VarChar(100)
+  precio             Decimal       @db.Decimal(10, 2)
+  ingredientes       String?
+  tiempo_preparacion Int?
+  disponible         Boolean?      @default(true)
+  fecha_creacion     DateTime?     @default(now()) @db.Timestamp(6)
+  order_items        order_items[]
+}
+
+model mesas {
+  id             Int       @id @default(autoincrement())
+  numero         Int       @unique
+  capacidad      Int
+  piso           Int?
+  ubicacion      String?   @db.VarChar(255)
+  estado         String?   @default("disponible") @db.VarChar(50)
+  reserva_id     Int?
+  posicion_x     Int?
+  posicion_y     Int?
+  cliente        String?   @db.VarChar(255)
+  total          Decimal?  @default(0) @db.Decimal(10, 2)
+  mesero_id      Int?
+  fecha_creacion DateTime? @default(now()) @db.Timestamp(6)
+  personal       personal? @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pisos          pisos?    @relation(fields: [piso], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reservas       reservas? @relation(fields: [reserva_id], references: [id], onUpdate: NoAction)
+  orders         orders[]
+  ventas         ventas[]
+}
+
+model order_items {
+  id              Int       @id @default(autoincrement())
+  order_id        Int
+  menu_item_id    Int?
+  nombre          String?   @db.VarChar(255)
+  precio_unitario Decimal?  @db.Decimal(10, 2)
+  cantidad        Int
+  subtotal        Decimal?  @db.Decimal(10, 2)
+  notas           String?
+  estado          String?   @default("pendiente") @db.VarChar(50)
+  fecha           DateTime? @default(now()) @db.Timestamp(6)
+  menu            menu?     @relation(fields: [menu_item_id], references: [id], onUpdate: NoAction)
+  orders          orders    @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model orders {
+  id          Int           @id @default(autoincrement())
+  mesa_id     Int?
+  mesero_id   Int?
+  estado      String?       @default("pendiente") @db.VarChar(50)
+  prioridad   String?       @default("normal") @db.VarChar(50)
+  total       Decimal?      @default(0) @db.Decimal(10, 2)
+  fecha       DateTime?     @default(now()) @db.Timestamp(6)
+  order_items order_items[]
+  mesas       mesas?        @relation(fields: [mesa_id], references: [id], onUpdate: NoAction)
+  personal    personal?     @relation(fields: [mesero_id], references: [id], onUpdate: NoAction)
+}
+
+model pagos {
+  id          Int       @id @default(autoincrement())
+  venta_id    Int?
+  monto       Decimal   @db.Decimal(10, 2)
+  metodo_pago String?   @db.VarChar(50)
+  notas       String?
+  usuario_id  Int?
+  fecha       DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model personal {
+  id                 Int       @id @default(autoincrement())
+  nombre             String    @db.VarChar(255)
+  puesto             String    @db.VarChar(100)
+  email              String?   @db.VarChar(255)
+  telefono           String?   @db.VarChar(20)
+  salario            Decimal?  @db.Decimal(10, 2)
+  turno              String?   @db.VarChar(50)
+  estado             String?   @default("activo") @db.VarChar(50)
+  fecha_contratacion DateTime? @default(now()) @db.Timestamp(6)
+  apellido           String?   @db.VarChar(255)
+  dni_curp           String?   @db.VarChar(50)
+  direccion          String?
+  username           String?   @unique @db.VarChar(50)
+  password_hash      String?   @db.VarChar(255)
+  rol_permisos       String?   @db.VarChar(100)
+  mesas              mesas[]
+  orders             orders[]
+  ventas             ventas[]
+}
+
+model personal_ausencias {
+  id             Int       @id @default(autoincrement())
+  personal_id    Int?
+  tipo           String?   @db.VarChar(50)
+  fecha_inicio   DateTime  @db.Date
+  fecha_fin      DateTime? @db.Date
+  motivo         String?
+  fecha_creacion DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model personal_horarios {
+  id          Int      @id @default(autoincrement())
+  personal_id Int?
+  fecha       DateTime @db.Date
+  tipo_turno  String?  @db.VarChar(50)
+  estado      String?  @default("asignado") @db.VarChar(50)
+
+  @@unique([personal_id, fecha], map: "unique_personal_fecha")
+}
+
+model pisos {
+  id              Int       @id @default(autoincrement())
+  numero          Int
+  nombre          String?   @db.VarChar(255)
+  capacidad_total Int?
+  fecha_creacion  DateTime? @default(now()) @db.Timestamp(6)
+  mesas           mesas[]
+}
+
+model reservas {
+  id               Int       @id @default(autoincrement())
+  nombre_cliente   String    @db.VarChar(255)
+  telefono_cliente String?   @db.VarChar(20)
+  email            String?   @db.VarChar(255)
+  fecha            DateTime  @db.Date
+  hora             DateTime  @db.Time(6)
+  numero_personas  Int
+  mesas_asignadas  String?   @db.VarChar(255)
+  notas            String?
+  estado           String?   @default("pendiente") @db.VarChar(50)
+  fecha_creacion   DateTime? @default(now()) @db.Timestamp(6)
+  mesas            mesas[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model reservations {
+  id                  Int       @id @default(autoincrement())
+  nombre_cliente      String    @db.VarChar(100)
+  telefono_cliente    String?   @db.VarChar(20)
+  email               String?   @db.VarChar(100)
+  fecha               DateTime  @db.Date
+  hora                DateTime  @db.Time(6)
+  numero_personas     Int
+  mesas_asignadas     Json?     @default("[]")
+  notas               String?
+  estado              String?   @default("pendiente") @db.VarChar(20)
+  fecha_creacion      DateTime? @default(now()) @db.Timestamp(6)
+  fecha_actualizacion DateTime? @default(now()) @db.Timestamp(6)
+
+  @@unique([fecha, hora, nombre_cliente])
+  @@index([estado], map: "idx_reservations_estado")
+  @@index([fecha], map: "idx_reservations_fecha")
+  @@index([nombre_cliente], map: "idx_reservations_nombre")
+}
+
+model sucursales {
+  id             Int       @id @default(autoincrement())
+  nombresucursal String?   @db.VarChar(255)
+  direccion      String?   @db.VarChar(255)
+  ciudad         String?   @db.VarChar(100)
+  estado         String?   @db.VarChar(100)
+  codigopostal   String?   @db.VarChar(10)
+  telefono       String?   @db.VarChar(20)
+  fecha_creacion DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model ventas {
+  id          Int       @id @default(autoincrement())
+  mesa_id     Int?
+  personal_id Int?
+  detalles    Json?
+  total       Decimal   @db.Decimal(10, 2)
+  metodo_pago String?   @db.VarChar(50)
+  nota        String?
+  estado      String?   @default("completada") @db.VarChar(50)
+  fecha       DateTime? @default(now()) @db.Timestamp(6)
+  mesas       mesas?    @relation(fields: [mesa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  personal    personal? @relation(fields: [personal_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}

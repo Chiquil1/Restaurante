@@ -1,53 +1,124 @@
-const pool = require('../config/Db');
+const prisma = require('../lib/prisma');
 
+// Obtener todos los pagos
 exports.getAllPayments = async () => {
-    const result = await pool.query(`
-        SELECT p.*, v.total as venta_total, u.nombre as usuario_nombre 
-        FROM pagos p 
-        LEFT JOIN ventas v ON p.venta_id = v.id 
-        LEFT JOIN personal u ON p.usuario_id = u.id 
-        ORDER BY p.fecha DESC
-    `);
-    return result.rows;
+
+    return await prisma.pagos.findMany({
+        include: {
+
+            ventas: {
+                select: {
+                    total: true
+                }
+            },
+
+            personal: {
+                select: {
+                    nombre: true
+                }
+            }
+        },
+
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
 };
 
+// Obtener pago por ID
 exports.getPaymentById = async (id) => {
-    const result = await pool.query('SELECT * FROM pagos WHERE id = $1', [id]);
-    return result.rows[0];
+
+    return await prisma.pagos.findUnique({
+        where: {
+            id: Number(id)
+        }
+    });
 };
 
-exports.createPayment = async (payment) => {
-    const { venta_id, monto, metodo_pago, notas, usuario_id } = payment;
-    const result = await pool.query(
-        `INSERT INTO pagos (venta_id, monto, metodo_pago, notas, usuario_id)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [venta_id, monto, metodo_pago, notas, usuario_id]
-    );
-    return result.rows[0];
+// Crear pago
+exports.createPayment = async (
+    payment
+) => {
+
+    const {
+        venta_id,
+        monto,
+        metodo_pago,
+        notas,
+        usuario_id
+    } = payment;
+
+    return await prisma.pagos.create({
+        data: {
+            venta_id,
+            monto,
+            metodo_pago,
+            notas,
+            usuario_id
+        }
+    });
 };
 
-exports.updatePayment = async (id, payment) => {
-    const { venta_id, monto, metodo_pago, notas, usuario_id } = payment;
-    const result = await pool.query(
-        `UPDATE pagos SET
-            venta_id=$1, monto=$2, metodo_pago=$3, notas=$4, usuario_id=$5
-        WHERE id=$6 RETURNING *`,
-        [venta_id, monto, metodo_pago, notas, usuario_id, id]
-    );
-    return result.rows[0];
+// Actualizar pago
+exports.updatePayment = async (
+    id,
+    payment
+) => {
+
+    return await prisma.pagos.update({
+        where: {
+            id: Number(id)
+        },
+
+        data: {
+            ...payment
+        }
+    });
 };
 
-exports.deletePayment = async (id) => {
-    await pool.query('DELETE FROM pagos WHERE id = $1', [id]);
-    return { message: 'Pago eliminado' };
+// Eliminar pago
+exports.deletePayment = async (
+    id
+) => {
+
+    await prisma.pagos.delete({
+        where: {
+            id: Number(id)
+        }
+    });
+
+    return {
+        message: 'Pago eliminado'
+    };
 };
 
-exports.getPaymentsBySale = async (venta_id) => {
-    const result = await pool.query('SELECT * FROM pagos WHERE venta_id = $1 ORDER BY fecha', [venta_id]);
-    return result.rows;
+// Obtener pagos por venta
+exports.getPaymentsBySale = async (
+    venta_id
+) => {
+
+    return await prisma.pagos.findMany({
+        where: {
+            venta_id: Number(venta_id)
+        },
+
+        orderBy: {
+            fecha: 'asc'
+        }
+    });
 };
 
+// Obtener total pagos
 exports.getTotalPayments = async () => {
-    const result = await pool.query('SELECT SUM(monto) as total FROM pagos');
-    return result.rows[0];
+
+    const result = await prisma.pagos.aggregate({
+        _sum: {
+            monto: true
+        }
+    });
+
+    return {
+        total:
+            result._sum.monto || 0
+    };
 };

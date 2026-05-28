@@ -1,55 +1,463 @@
+/**
+ * CONTROLLER: Reservaciones
+ * Sistema completo de reservaciones para restaurante
+ */
+
 const reservationsModel = require('../Models/reservationsModel');
+const tablesModel = require('../Models/tablesModel');
 
-// Obtener todas las reservaciones (acepta filtros por query: ?estado=pendiente&fecha=2023-10-20)
-exports.getReservations = async (req, res) => {
+const logger = require('../middleware/logger');
+const { ApiError, asyncHandler } = require('../middleware/errorHandler');
+const { validators } = require('../middleware/validators');
+
+/**
+ * Helper: Parsear mesas asignadas
+ */
+const parseMesas = (mesas) => {
+    if (!mesas) return [];
+
     try {
-        const reservations = await reservationsModel.getAllReservations(req.query);
-        res.json(reservations);
-    } catch (error) {
-        console.error("Error en getReservations:", error);
-        res.status(500).json({ error: error.message });
+        return typeof mesas === 'string'
+            ? JSON.parse(mesas)
+            : mesas;
+    } catch {
+        throw new ApiError('Formato inválido de mesas_asignadas', 400);
     }
 };
 
-// Obtener reservación por ID
-exports.getReservationById = async (req, res) => {
-    try {
-        const reservation = await reservationsModel.getReservationById(req.params.id);
-        if (!reservation) return res.status(404).json({ error: 'Reservación no encontrada' });
-        res.json(reservation);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+/**
+ * Helper: Emitir socket
+ */
+const emitReservationEvent = (req, event, payload) => {
+    const io = req.app.get('io');
+
+    io.of('/reservations').emit(event, {
+        ...payload,
+        timestamp: new Date().toISOString()
+    });
 };
 
-// Crear reservación
-exports.createReservation = async (req, res) => {
-    try {
-        const reservation = await reservationsModel.createReservation(req.body);
-        res.status(201).json(reservation);
-    } catch (error) {
-        console.error("Error creando reserva:", error);
-        res.status(500).json({ error: error.message });
-    }
-};
+/**
+ * GET ALL
+ */
+exports.getAllReservations = asyncHandler(async (req, res) => {
+    const reservations = await reservationsModel.getAllReservations();
 
-// Actualizar reservación
-exports.updateReservation = async (req, res) => {
-    try {
-        const reservation = await reservationsModel.updateReservation(req.params.id, req.body);
-        if (!reservation) return res.status(404).json({ error: 'Reservación no encontrada' });
-        res.json(reservation);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
+    res.json({
+        success: true,
+        data: reservations,
+        count: reservations.length,
+        timestamp: new Date().toISOString()
+    });
+});
 
-// Eliminar reservación
-exports.deleteReservation = async (req, res) => {
-    try {
-        const result = await reservationsModel.deleteReservation(req.params.id);
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+/**
+ * GET BY ID
+ */
+exports.getReservationById = asyncHandler(async (req, res) => {
+    const id = validators.validateId(req.params.id, 'ID reservación');
+
+    const reservation = await reservationsModel.getReservationById(id);
+
+    if (!reservation) {
+        throw new ApiError('Reservación no encontrada', 404);
     }
-};
+
+    res.json({
+        success: true,
+        data: reservation
+    });
+});
+
+/**
+ * CREATE
+ */
+exports.createReservation = asyncHandler(async (req, res) => {
+    const io = req.app.get('io');
+
+    const {
+        nombre_cliente,
+        telefono_cliente,
+        email,
+        fecha,
+        hora,
+        numero_personas,
+        mesas_asignadas,
+        notas,
+        estado
+    } = req.body;
+
+    validators.validateRequired(
+        {
+            nombre_cliente,
+            fecha,
+            hora,
+            numero_personas
+        },
+        ['nombre_cliente', 'fecha', 'hora', 'numero_personas'],
+        'Reservación'
+    );
+
+    validators.validatePositiveNumber(
+        numero_personas,
+        'numero_personas'
+    );
+
+    if (email) {
+        validators.validateEmail(email);
+    }
+
+    const mesasArray = parseMesas(mesas_asignadas);
+
+    // Validar conflicto
+    const conflict = await reservationsModel.checkConflict(
+        fecha,
+        hora,
+        nombre_cliente
+    );
+
+    if (conflict) {
+        throw new ApiError(
+            'Ya existe una reservación para este cliente en esa fecha/hora',
+            409
+        );
+    }
+
+    // Validar mesas
+    if (mesasArray.length > 0) {
+        const mesas = await tablesModel.getTablesByIds(mesasArray);
+
+        if (mesas.length !== mesasArray.length) {
+            throw new ApiError('Una o más mesas no existen', 404);
+        }
+
+        const ocupadas = mesas.filter(
+            mesa => mesa.estado === 'ocupada'
+        );
+
+        if (ocupadas.length > 0) {
+            throw new ApiError(
+                `Mesas ocupadas: ${ocupadas.map(m => m.numero).join(', ')}`,
+                409
+            );
+        }
+
+        const capacidad = mesas.reduce(
+            (acc, mesa) => acc + mesa.capacidad,
+            0
+        );
+
+        if (capacidad < numero_personas) {
+            throw new ApiError(
+                `Capacidad insuficiente (${capacidad})`,
+                400
+            );
+        }
+    }
+
+    // Crear reservación
+    const reservation = await reservationsModel.createReservation({
+        nombre_cliente,
+        telefono_cliente,
+        email,
+        fecha,
+        hora,
+        numero_personas,
+        mesas_asignadas: JSON.stringify(mesasArray),
+        notas,
+        estado: estado || 'pendiente'
+    });
+
+    // Actualizar mesas
+    for (const mesaId of mesasArray) {
+        await tablesModel.updateTableStatus(
+            mesaId,
+            'reservada',
+            null,
+            nombre_cliente
+        );
+    }
+
+    logger.success('Reservación creada', {
+        reservationId: reservation.id
+    });
+
+    emitReservationEvent(req, 'reservation_created', {
+        reservation
+    });
+
+    res.status(201).json({
+        success: true,
+        message: 'Reservación creada correctamente',
+        data: reservation
+    });
+});
+
+/**
+ * UPDATE
+ */
+exports.updateReservation = asyncHandler(async (req, res) => {
+    const id = validators.validateId(req.params.id);
+
+    const existing =
+        await reservationsModel.getReservationById(id);
+
+    if (!existing) {
+        throw new ApiError('Reservación no encontrada', 404);
+    }
+
+    const {
+        nombre_cliente,
+        telefono_cliente,
+        email,
+        fecha,
+        hora,
+        numero_personas,
+        mesas_asignadas,
+        notas,
+        estado
+    } = req.body;
+
+    const mesasNuevas = parseMesas(mesas_asignadas);
+    const mesasAnteriores = parseMesas(
+        existing.mesas_asignadas
+    );
+
+    // Liberar mesas antiguas
+    const liberar = mesasAnteriores.filter(
+        mesa => !mesasNuevas.includes(mesa)
+    );
+
+    for (const mesaId of liberar) {
+        await tablesModel.updateTableStatus(
+            mesaId,
+            'libre'
+        );
+    }
+
+    // Reservar nuevas
+    for (const mesaId of mesasNuevas) {
+        await tablesModel.updateTableStatus(
+            mesaId,
+            'reservada',
+            null,
+            nombre_cliente || existing.nombre_cliente
+        );
+    }
+
+    const updated =
+        await reservationsModel.updateReservation(id, {
+            nombre_cliente,
+            telefono_cliente,
+            email,
+            fecha,
+            hora,
+            numero_personas,
+            mesas_asignadas:
+                JSON.stringify(mesasNuevas),
+            notas,
+            estado
+        });
+
+    logger.info('Reservación actualizada', { id });
+
+    emitReservationEvent(req, 'reservation_updated', {
+        reservation: updated
+    });
+
+    res.json({
+        success: true,
+        message: 'Reservación actualizada',
+        data: updated
+    });
+});
+
+/**
+ * UPDATE STATUS
+ */
+exports.updateReservationStatus = asyncHandler(async (req, res) => {
+    const id = validators.validateId(req.params.id);
+
+    const { estado } = req.body;
+
+    validators.validateReservationStatus(estado);
+
+    const reservation =
+        await reservationsModel.getReservationById(id);
+
+    if (!reservation) {
+        throw new ApiError('Reservación no encontrada', 404);
+    }
+
+    const mesas = parseMesas(
+        reservation.mesas_asignadas
+    );
+
+    // Cancelar -> liberar mesas
+    if (estado === 'cancelada') {
+        for (const mesaId of mesas) {
+            await tablesModel.updateTableStatus(
+                mesaId,
+                'libre'
+            );
+        }
+    }
+
+    // Confirmar -> reservar mesas
+    if (estado === 'confirmada') {
+        for (const mesaId of mesas) {
+            await tablesModel.updateTableStatus(
+                mesaId,
+                'reservada',
+                null,
+                reservation.nombre_cliente
+            );
+        }
+    }
+
+    // Cliente llegó
+    if (estado === 'finalizada') {
+        for (const mesaId of mesas) {
+            await tablesModel.updateTableStatus(
+                mesaId,
+                'ocupada',
+                null,
+                reservation.nombre_cliente
+            );
+        }
+    }
+
+    const updated =
+        await reservationsModel.updateReservation(id, {
+            estado
+        });
+
+    logger.info('Estado reservación actualizado', {
+        id,
+        estado
+    });
+
+    emitReservationEvent(req, 'reservation_status_updated', {
+        reservation: updated
+    });
+
+    res.json({
+        success: true,
+        message: `Estado actualizado a ${estado}`,
+        data: updated
+    });
+});
+
+/**
+ * DELETE
+ */
+exports.deleteReservation = asyncHandler(async (req, res) => {
+    const id = validators.validateId(req.params.id);
+
+    const reservation =
+        await reservationsModel.getReservationById(id);
+
+    if (!reservation) {
+        throw new ApiError('Reservación no encontrada', 404);
+    }
+
+    // Liberar mesas
+    const mesas = parseMesas(
+        reservation.mesas_asignadas
+    );
+
+    for (const mesaId of mesas) {
+        await tablesModel.updateTableStatus(
+            mesaId,
+            'libre'
+        );
+    }
+
+    await reservationsModel.deleteReservation(id);
+
+    logger.success('Reservación eliminada', { id });
+
+    emitReservationEvent(req, 'reservation_deleted', {
+        reservationId: id
+    });
+
+    res.json({
+        success: true,
+        message: 'Reservación eliminada'
+    });
+});
+
+/**
+ * GET BY DATE
+ */
+exports.getReservationsByDate = asyncHandler(async (req, res) => {
+    const { fecha } = req.params;
+
+    const reservations =
+        await reservationsModel.getReservationsByDate(
+            fecha
+        );
+
+    res.json({
+        success: true,
+        data: reservations
+    });
+});
+
+/**
+ * GET BY STATUS
+ */
+exports.getReservationsByStatus = asyncHandler(async (req, res) => {
+    const { estado } = req.params;
+
+    validators.validateReservationStatus(estado);
+
+    const reservations =
+        await reservationsModel.getReservationsByStatus(
+            estado
+        );
+
+    res.json({
+        success: true,
+        data: reservations
+    });
+});
+
+/**
+ * SEARCH
+ */
+exports.searchReservations = asyncHandler(async (req, res) => {
+    const { q } = req.query;
+
+    if (!q || q.length < 2) {
+        throw new ApiError(
+            'La búsqueda requiere al menos 2 caracteres',
+            400
+        );
+    }
+
+    const reservations =
+        await reservationsModel.searchReservations(q);
+
+    res.json({
+        success: true,
+        data: reservations
+    });
+});
+
+/**
+ * STATS
+ */
+exports.getReservationStats = asyncHandler(async (req, res) => {
+    const { fecha } = req.query;
+
+    const stats =
+        await reservationsModel.getReservationStats(
+            fecha
+        );
+
+    res.json({
+        success: true,
+        data: stats
+    });
+});

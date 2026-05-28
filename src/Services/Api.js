@@ -65,7 +65,8 @@ export const OrderService = {
   getAll: () => api.get('/orders').then((res) => res.data),
   getById: (id) => api.get(`/orders/${id}`).then((res) => res.data),
   create: (data) => api.post('/orders', data).then((res) => res.data),
-  updateStatus: (id, status) => api.put(`/orders/${id}/status`, { status }).then((res) => res.data),
+  createWithItems: (orderData, items) => api.post('/orders/create-with-items', { order: orderData, items }).then((res) => res.data),
+  updateStatus: (id, status) => api.put(`/orders/${id}`, { estado: status }).then((res) => res.data),
   delete: (id) => api.delete(`/orders/${id}`).then((res) => res.data),
 };
 

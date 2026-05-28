@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { 
   PlusIcon, 
   PencilIcon, 
@@ -12,13 +13,11 @@ import {
   ClockIcon
 } from '@heroicons/react/24/outline';
 
-// IMPORTACIONES OBLIGATORIAS SEGÚN REGLAS
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
 
-const API_URL = '/api/tables'; // Asegúrate que esta ruta apunte a tu routes de mesas
+const API_URL = '/api/tables';
 
-// --- Estilos Consistentes (Glassmorphism) ---
 const inputClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all";
 const labelClass = "block text-sm font-bold text-slate-300 mb-1.5 ml-1";
 const selectClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all cursor-pointer";
@@ -32,13 +31,14 @@ export default function TablesMap() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [socket, setSocket] = useState(null);
 
   const initialFormState = {
     numero: '',
     capacidad: 2,
     piso: 1,
     ubicacion: '',
-    estado: 'libre', // libre, ocupada, reservada
+    estado: 'libre',
     mesero_id: '',
     cliente: '',
     total: 0,
@@ -48,19 +48,38 @@ export default function TablesMap() {
 
   const [formData, setFormData] = useState(initialFormState);
 
+  // --- Socket.io Connection ---
+  useEffect(() => {
+    const newSocket = io();
+    setSocket(newSocket);
+
+    // Escuchar actualizaciones en tiempo real
+    newSocket.on('actualizacion', (data) => {
+      console.log('📡 Actualización recibida en TablesMap:', data);
+      
+      // Recargar cuando hay cambios en mesas, órdenes o reservaciones
+      if (data.tipo && ['orden_creada', 'orden_cancelada', 'orden_actualizada', 'mesa_actualizada', 'mesa_liberada', 'reserva_creada', 'reserva_cancelada', 'mesa_creada'].includes(data.tipo)) {
+        console.log('🔄 Recargando estado de mesas...');
+        fetchTables();
+      }
+    });
+
+    return () => newSocket.disconnect();
+  }, []);
+
   useEffect(() => {
     fetchTables();
     fetchStaff();
   }, [filterStatus]);
 
-  // --- Lógica de Conexión con Backend ---
-  
   const fetchTables = async () => {
     try {
       setLoading(true);
       const params = filterStatus ? { params: { estado: filterStatus } } : {};
       const response = await axios.get(API_URL, params);
-      setTables(response.data);
+      // Manejar respuesta con estructura { success, data, count, ... }
+      const tablesData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      setTables(tablesData);
     } catch (err) {
       console.error("Error fetching tables:", err);
       setError('Error al cargar las mesas. Verifica la API.');
@@ -71,10 +90,12 @@ export default function TablesMap() {
 
   const fetchStaff = async () => {
     try {
-      const response = await axios.get('/api/staff'); // Ajusta si tu ruta es diferente
-      setStaff(response.data);
+      const response = await axios.get('/api/staff');
+      // Manejar respuesta con estructura { success, data, count, ... }
+      const staffData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      setStaff(staffData);
     } catch (err) {
-      console.log("No se pudo cargar el personal (quizás la ruta no existe aún)");
+      console.log("No se pudo cargar el personal");
     }
   };
 
@@ -108,7 +129,7 @@ export default function TablesMap() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('¿Estás seguro de eliminar esta mesa? Esto podría afectar historiales.')) {
+    if (window.confirm('¿Estás seguro de eliminar esta mesa?')) {
       try {
         await axios.delete(`${API_URL}/${id}`);
         setSuccess('Mesa eliminada');
@@ -139,7 +160,6 @@ export default function TablesMap() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Helper para colores de estado
   const getStatusColor = (status) => {
     switch (status) {
       case 'libre': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]';
@@ -152,7 +172,6 @@ export default function TablesMap() {
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-200 p-4 md:p-8 font-sans">
       
-      {/* --- Header --- */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-10">
         <div>
           <h1 className="text-4xl font-black text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-400 to-amber-500">
@@ -166,7 +185,6 @@ export default function TablesMap() {
         </GlassButton>
       </div>
 
-      {/* --- Alertas --- */}
       {error && (
         <GlassCard className="mb-6 border-l-4 border-l-red-500 bg-red-900/20 backdrop-blur-md">
           <div className="p-4 flex justify-between items-center">
@@ -190,7 +208,6 @@ export default function TablesMap() {
         </GlassCard>
       )}
 
-      {/* --- Filtros y Estadísticas Rápidas --- */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <GlassCard className="p-4 flex flex-col justify-center items-center text-center border-white/10">
           <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Total Mesas</span>
@@ -220,7 +237,6 @@ export default function TablesMap() {
         </GlassCard>
       </div>
 
-      {/* --- Formulario (Modal Inline) --- */}
       {showForm && (
         <GlassCard className="mb-8 p-8 animate-in fade-in slide-in-from-top-8 duration-300 border-white/10 bg-slate-800/40">
           <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
@@ -293,7 +309,6 @@ export default function TablesMap() {
         </GlassCard>
       )}
 
-      {/* --- Grid Visual de Mesas --- */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mb-4"></div>
@@ -310,7 +325,6 @@ export default function TablesMap() {
             tables.map((table) => (
               <GlassCard key={table.id} className={`p-6 flex flex-col h-full group hover:-translate-y-2 transition-transform duration-300 border-white/10 relative overflow-hidden ${getStatusColor(table.estado).split(' ')[0]}`}>
                 
-                {/* Indicador de Estado (Glow) */}
                 <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full -mr-10 -mt-10 pointer-events-none`} />
 
                 <div className="flex justify-between items-start mb-4 relative z-10">

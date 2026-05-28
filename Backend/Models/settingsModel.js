@@ -1,65 +1,144 @@
-const pool = require('../config/Db');
+const prisma = require('../lib/prisma');
 
 // ── Configuración General ──
+
+// Obtener configuración
 exports.getConfig = async () => {
-    const result = await pool.query('SELECT * FROM configuracion_general ORDER BY id DESC LIMIT 1');
-    return result.rows[0];
+
+    return await prisma.configuracion_general.findFirst({
+        orderBy: {
+            id: 'desc'
+        }
+    });
 };
 
+// Actualizar configuración
 exports.updateConfig = async (config) => {
-    const { nombreNegocio, moneda, horario_apertura, horario_cierre, telefono, email } = config;
-    const result = await pool.query(
-        `UPDATE configuracion_general SET
-            nombreNegocio=$1, moneda=$2, horario_apertura=$3, horario_cierre=$4, telefono=$5, email=$6
-        WHERE id=1 RETURNING *`,
-        [nombreNegocio, moneda, horario_apertura, horario_cierre, telefono, email]
-    );
-    return result.rows[0];
+
+    const {
+        nombreNegocio,
+        moneda,
+        horario_apertura,
+        horario_cierre,
+        telefono,
+        email
+    } = config;
+
+    return await prisma.configuracion_general.update({
+        where: {
+            id: 1
+        },
+
+        data: {
+            nombreNegocio,
+            moneda,
+            horario_apertura,
+            horario_cierre,
+            telefono,
+            email
+        }
+    });
 };
 
+// Crear configuración
 exports.createConfig = async (config) => {
-    const { nombreNegocio, moneda, horario_apertura, horario_cierre, telefono, email } = config;
-    const result = await pool.query(
-        `INSERT INTO configuracion_general (nombreNegocio, moneda, horario_apertura, horario_cierre, telefono, email)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [nombreNegocio, moneda, horario_apertura, horario_cierre, telefono, email]
-    );
-    return result.rows[0];
+
+    const {
+        nombreNegocio,
+        moneda,
+        horario_apertura,
+        horario_cierre,
+        telefono,
+        email
+    } = config;
+
+    return await prisma.configuracion_general.create({
+        data: {
+            nombreNegocio,
+            moneda,
+            horario_apertura,
+            horario_cierre,
+            telefono,
+            email
+        }
+    });
 };
 
 // ── Sucursales ──
+
+// Obtener sucursales
 exports.getSucursales = async () => {
-    const result = await pool.query('SELECT * FROM sucursales ORDER BY id');
-    return result.rows;
+
+    return await prisma.sucursales.findMany({
+        orderBy: {
+            id: 'asc'
+        }
+    });
 };
 
+// Obtener sucursal por ID
 exports.getSucursalById = async (id) => {
-    const result = await pool.query('SELECT * FROM sucursales WHERE id = $1', [id]);
-    return result.rows[0];
+
+    return await prisma.sucursales.findUnique({
+        where: {
+            id: Number(id)
+        }
+    });
 };
 
-exports.createSucursal = async (sucursal) => {
-    const { nombreSucursal, direccion, ciudad, estado, codigoPostal, telefono } = sucursal;
-    const result = await pool.query(
-        `INSERT INTO sucursales (nombreSucursal, direccion, ciudad, estado, codigoPostal, telefono)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [nombreSucursal, direccion, ciudad, estado, codigoPostal, telefono]
-    );
-    return result.rows[0];
+// Crear sucursal
+exports.createSucursal = async (
+    sucursal
+) => {
+
+    const {
+        nombreSucursal,
+        direccion,
+        ciudad,
+        estado,
+        codigoPostal,
+        telefono
+    } = sucursal;
+
+    return await prisma.sucursales.create({
+        data: {
+            nombreSucursal,
+            direccion,
+            ciudad,
+            estado,
+            codigoPostal,
+            telefono
+        }
+    });
 };
 
-exports.updateSucursal = async (id, sucursal) => {
-    const { nombreSucursal, direccion, ciudad, estado, codigoPostal, telefono } = sucursal;
-    const result = await pool.query(
-        `UPDATE sucursales SET
-            nombreSucursal=$1, direccion=$2, ciudad=$3, estado=$4, codigoPostal=$5, telefono=$6
-        WHERE id=$7 RETURNING *`,
-        [nombreSucursal, direccion, ciudad, estado, codigoPostal, telefono, id]
-    );
-    return result.rows[0];
+// Actualizar sucursal
+exports.updateSucursal = async (
+    id,
+    sucursal
+) => {
+
+    return await prisma.sucursales.update({
+        where: {
+            id: Number(id)
+        },
+
+        data: {
+            ...sucursal
+        }
+    });
 };
 
+// Eliminar sucursal
 exports.deleteSucursal = async (id) => {
-    await pool.query('DELETE FROM sucursales WHERE id = $1', [id]);
-    return { message: 'Sucursal eliminada' };
+
+    await prisma.sucursales.delete({
+        where: {
+            id: Number(id)
+        }
+    });
+
+    return {
+        message: 'Sucursal eliminada'
+    };
 };

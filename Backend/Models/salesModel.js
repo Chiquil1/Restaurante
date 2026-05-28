@@ -1,69 +1,171 @@
-const pool = require('../config/Db');
+const prisma = require('../lib/prisma');
 
+// Obtener todas las ventas
 exports.getAllSales = async () => {
-    const result = await pool.query(`
-        SELECT v.*, m.numero as mesa_numero, p.nombre as vendedor_nombre 
-        FROM ventas v 
-        LEFT JOIN mesas m ON v.mesa_id = m.id 
-        LEFT JOIN personal p ON v.personal_id = p.id 
-        ORDER BY v.fecha DESC
-    `);
-    return result.rows;
+
+    return await prisma.ventas.findMany({
+        include: {
+            mesas: {
+                select: {
+                    numero: true
+                }
+            },
+
+            personal: {
+                select: {
+                    nombre: true
+                }
+            }
+        },
+
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
 };
 
+// Obtener venta por ID
 exports.getSaleById = async (id) => {
-    const result = await pool.query('SELECT * FROM ventas WHERE id = $1', [id]);
-    return result.rows[0];
+
+    return await prisma.ventas.findUnique({
+        where: {
+            id: Number(id)
+        }
+    });
 };
 
+// Crear venta
 exports.createSale = async (sale) => {
-    const { mesa_id, personal_id, detalles, total, metodo_pago, saldo_pendiente, estado, nota } = sale;
-    const result = await pool.query(
-        `INSERT INTO ventas (mesa_id, personal_id, detalles, total, metodo_pago, saldo_pendiente, estado, nota)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [mesa_id, personal_id, JSON.stringify(detalles), total, metodo_pago, saldo_pendiente || 0, estado || 'pendiente', nota]
-    );
-    return result.rows[0];
+
+    const {
+        mesa_id,
+        personal_id,
+        detalles,
+        total,
+        metodo_pago,
+        saldo_pendiente,
+        estado,
+        nota
+    } = sale;
+
+    return await prisma.ventas.create({
+        data: {
+            mesa_id,
+            personal_id,
+
+            detalles,
+
+            total,
+
+            metodo_pago,
+
+            saldo_pendiente:
+                saldo_pendiente || 0,
+
+            estado:
+                estado || 'pendiente',
+
+            nota
+        }
+    });
 };
 
-exports.updateSale = async (id, sale) => {
-    const { mesa_id, personal_id, detalles, total, metodo_pago, saldo_pendiente, estado, nota } = sale;
-    const result = await pool.query(
-        `UPDATE ventas SET
-            mesa_id=$1, personal_id=$2, detalles=$3, total=$4, metodo_pago=$5, saldo_pendiente=$6, estado=$7, nota=$8
-        WHERE id=$9 RETURNING *`,
-        [mesa_id, personal_id, JSON.stringify(detalles), total, metodo_pago, saldo_pendiente, estado, nota, id]
-    );
-    return result.rows[0];
+// Actualizar venta
+exports.updateSale = async (
+    id,
+    sale
+) => {
+
+    return await prisma.ventas.update({
+        where: {
+            id: Number(id)
+        },
+
+        data: {
+            ...sale
+        }
+    });
 };
 
+// Eliminar venta
 exports.deleteSale = async (id) => {
-    await pool.query('DELETE FROM ventas WHERE id = $1', [id]);
-    return { message: 'Venta eliminada' };
+
+    await prisma.ventas.delete({
+        where: {
+            id: Number(id)
+        }
+    });
+
+    return {
+        message: 'Venta eliminada'
+    };
 };
 
+// Ventas por fecha
 exports.getSalesByDate = async (fecha) => {
-    const result = await pool.query("SELECT * FROM ventas WHERE DATE(fecha) = $1 ORDER BY fecha DESC", [fecha]);
-    return result.rows;
+
+    const start = new Date(fecha);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(fecha);
+    end.setHours(23, 59, 59, 999);
+
+    return await prisma.ventas.findMany({
+        where: {
+            fecha: {
+                gte: start,
+                lte: end
+            }
+        },
+
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
 };
 
-exports.getSalesByStatus = async (estado) => {
-    const result = await pool.query('SELECT * FROM ventas WHERE estado = $1 ORDER BY fecha DESC', [estado]);
-    return result.rows;
+// Ventas por estado
+exports.getSalesByStatus = async (
+    estado
+) => {
+
+    return await prisma.ventas.findMany({
+        where: {
+            estado
+        },
+
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
 };
 
-// FUNCIÓN ÚNICA Y CORREGIDA
-exports.getTotalSales = async (startDate, endDate) => {
-    let query = 'SELECT SUM(total) as total_general FROM ventas';
-    const values = [];
+// Total ventas
+exports.getTotalSales = async (
+    startDate,
+    endDate
+) => {
+
+    const where = {};
 
     if (startDate && endDate) {
-        query += ' WHERE fecha BETWEEN $1 AND $2';
-        values.push(startDate, endDate);
+
+        where.fecha = {
+            gte: new Date(startDate),
+            lte: new Date(endDate)
+        };
     }
 
-    const result = await pool.query(query, values);
-    return { 
-        total: result.rows[0].total_general ? parseFloat(result.rows[0].total_general) : 0 
+    const result = await prisma.ventas.aggregate({
+        where,
+
+        _sum: {
+            total: true
+        }
+    });
+
+    return {
+        total:
+            result._sum.total || 0
     };
 };

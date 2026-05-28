@@ -52,9 +52,14 @@ export default function OrdersPOS() {
         axios.get(API_URL).catch(() => ({ data: [] }))
       ]);
 
-      setMenuItems(menuRes.data || []);
-      setTables(tablesRes.data || []);
-      setOrders(ordersRes.data || []);
+      // Manejar estructura de respuesta { success, data, count, ... }
+      const menuData = Array.isArray(menuRes.data) ? menuRes.data : (menuRes.data?.data || []);
+      const tablesData = Array.isArray(tablesRes.data) ? tablesRes.data : (tablesRes.data?.data || []);
+      const ordersData = Array.isArray(ordersRes.data) ? ordersRes.data : (ordersRes.data?.data || []);
+      
+      setMenuItems(menuData);
+      setTables(tablesData);
+      setOrders(ordersData);
     } catch (err) {
       console.error("Error cargando datos iniciales:", err);
       setError("No se pudieron cargar los datos del sistema.");
@@ -107,7 +112,7 @@ export default function OrdersPOS() {
     }
 
     try {
-      // 1. Crear la orden cabecera
+      // 1. Preparar la orden cabecera
       const orderPayload = {
         mesa_id: checkoutData.mesa_id ? Number(checkoutData.mesa_id) : null,
         mesero_id: 1, // TODO: Obtener del usuario logueado
@@ -116,33 +121,35 @@ export default function OrdersPOS() {
         cliente: checkoutData.cliente || null
       };
 
-      const orderResponse = await axios.post(API_URL, orderPayload);
-      const newOrderId = orderResponse.data.id;
+      // 2. Preparar items de la orden
+      const itemsPayload = cart.map(item => ({
+        menu_item_id: item.id,
+        nombre: item.nombre,
+        precio_unitario: Number(item.precio),
+        cantidad: item.cantidad,
+        subtotal: Number(item.precio) * item.cantidad,
+        estado: 'pendiente'
+      }));
 
-      // 2. Crear los items de la orden (Loop)
-      // Nota: En producción idealmente sería una transacción o un endpoint bulk
-      for (const item of cart) {
-        await axios.post('/api/order-items', {
-          order_id: newOrderId,
-          menu_item_id: item.id,
-          nombre: item.nombre,
-          precio_unitario: item.precio,
-          cantidad: item.cantidad,
-          subtotal: item.precio * item.cantidad,
-          estado: 'pendiente'
-        });
-      }
+      // 3. Enviar orden + items en una sola solicitud
+      const response = await axios.post(`${API_URL}/create-with-items`, {
+        order: orderPayload,
+        items: itemsPayload
+      });
 
+      console.log("✅ Orden creada exitosamente:", response.data);
       setSuccess("Pedido creado exitosamente");
       setCart([]);
       setShowCheckout(false);
       setCheckoutData({ mesa_id: '', cliente: '', notas: '' });
-      initData(); // Recargar lista
+      
+      // Recargar datos después de 500ms
+      setTimeout(() => initData(), 500);
       
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error("Error creando pedido:", err);
-      setError(err.response?.data?.error || "Error al crear el pedido. Revisa la consola.");
+      setError(err.response?.data?.error || err.message || "Error al crear el pedido. Revisa la consola.");
       setTimeout(() => setError(''), 5000);
     }
   };
@@ -196,28 +203,32 @@ export default function OrdersPOS() {
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-20">
             {filteredItems.length > 0 ? (
               filteredItems.map(item => (
-                <GlassCard 
-                  key={item.id} 
-                  onClick={() => item.disponible && addToCart(item)}
-                  className={`p-4 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-orange-500/20 border-white/10 ${!item.disponible ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:border-orange-500/50'}`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-[10px] font-bold uppercase text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
-                      {item.categoria}
-                    </span>
-                    {!item.disponible && <span className="text-[10px] font-bold text-red-400">Agotado</span>}
-                  </div>
-                  <h3 className="font-bold text-white text-sm mb-1 line-clamp-2">{item.nombre}</h3>
-                  <p className="text-xs text-slate-400 mb-3 line-clamp-2 h-8">{item.descripcion}</p>
-                  <div className="flex justify-between items-center mt-auto">
-                    <span className="text-lg font-black text-white">${Number(item.precio).toFixed(2)}</span>
-                    {item.disponible && (
-                      <button className="w-8 h-8 rounded-full bg-orange-500 hover:bg-orange-600 flex items-center justify-center text-white transition-colors">
-                        <PlusIcon className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
-                </GlassCard>
+                <div key={item.id} className="relative group">
+                  <GlassCard 
+                    className={`p-4 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-orange-500/20 border-white/10 h-full flex flex-col ${!item.disponible ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:border-orange-500/50'}`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[10px] font-bold uppercase text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full">
+                        {item.categoria}
+                      </span>
+                      {!item.disponible && <span className="text-[10px] font-bold text-red-400">Agotado</span>}
+                    </div>
+                    <h3 className="font-bold text-white text-sm mb-1 line-clamp-2">{item.nombre}</h3>
+                    <p className="text-xs text-slate-400 mb-3 line-clamp-2 h-8">{item.descripcion}</p>
+                    <div className="flex justify-between items-center mt-auto">
+                      <span className="text-lg font-black text-white">${Number(item.precio).toFixed(2)}</span>
+                    </div>
+                  </GlassCard>
+                  
+                  {item.disponible && (
+                    <button 
+                      onClick={() => addToCart(item)}
+                      className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-orange-500 hover:bg-orange-600 flex items-center justify-center text-white transition-all duration-300 shadow-lg hover:shadow-orange-500/50 hover:scale-110 group-hover:scale-100"
+                    >
+                      <PlusIcon className="w-6 h-6" />
+                    </button>
+                  )}
+                </div>
               ))
             ) : (
               <div className="col-span-full text-center py-10 text-slate-500">

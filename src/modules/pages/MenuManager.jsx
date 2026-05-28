@@ -56,7 +56,8 @@ export default function MenuManager() {
       const params = filterCategory ? { params: { categoria: filterCategory } } : {};
       
       const response = await axios.get(API_URL, params);
-      setItems(response.data);
+      const itemsData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      setItems(itemsData);
     } catch (err) {
       console.error("Error detallado fetching menu:", err);
       const msg = err.response?.data?.error || err.message || 'Error al cargar el menú';
@@ -69,7 +70,8 @@ export default function MenuManager() {
   const fetchCategories = async () => {
     try {
       const response = await axios.get(`${API_URL}/categories`);
-      setCategories(response.data);
+      const categoriesData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      setCategories(categoriesData);
     } catch (err) {
       console.warn("No se pudieron cargar categorías (quizás la ruta no existe aún):", err.message);
       setCategories([]);

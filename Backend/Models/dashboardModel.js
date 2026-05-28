@@ -1,64 +1,151 @@
-const pool = require('../config/Db');
+const prisma = require('../lib/prisma');
 
 // ── Ventas de Hoy ──
+
 exports.getVentasHoy = async () => {
-    const result = await pool.query(
-        `SELECT COALESCE(SUM(total), 0) as total 
-         FROM ventas 
-         WHERE DATE(fecha) = CURRENT_DATE`
-    );
-    return result.rows[0];
+
+    const result =
+        await prisma.ventas.aggregate({
+
+        _sum: {
+            total: true
+        },
+
+        where: {
+            fecha: {
+                gte: new Date(
+                    new Date().setHours(0, 0, 0, 0)
+                ),
+
+                lte: new Date(
+                    new Date().setHours(23, 59, 59, 999)
+                )
+            }
+        }
+    });
+
+    return {
+        total:
+            result._sum.total || 0
+    };
 };
 
 // ── Clientes de Hoy ──
+
 exports.getClientesHoy = async () => {
-    const result = await pool.query(
-        `SELECT COUNT(DISTINCT mesa_id) as total 
-         FROM ventas 
-         WHERE DATE(fecha) = CURRENT_DATE`
-    );
-    return result.rows[0];
+
+    const clientes =
+        await prisma.ventas.findMany({
+
+        where: {
+            fecha: {
+                gte: new Date(
+                    new Date().setHours(0, 0, 0, 0)
+                ),
+
+                lte: new Date(
+                    new Date().setHours(23, 59, 59, 999)
+                )
+            }
+        },
+
+        distinct: ['mesa_id'],
+
+        select: {
+            mesa_id: true
+        }
+    });
+
+    return {
+        total: clientes.length
+    };
 };
 
 // ── Pedidos Activos ──
+
 exports.getPedidosActivos = async () => {
-    const result = await pool.query(
-        `SELECT COUNT(*) as total 
-         FROM orders 
-         WHERE estado = 'abierto'`
-    );
-    return result.rows[0];
+
+    const total =
+        await prisma.orders.count({
+
+        where: {
+            estado: 'abierto'
+        }
+    });
+
+    return {
+        total
+    };
 };
 
 // ── Mesas Ocupadas ──
+
 exports.getMesasOcupadas = async () => {
-    const result = await pool.query(
-        `SELECT COUNT(*) as total 
-         FROM mesas 
-         WHERE estado = 'ocupada'`
-    );
-    return result.rows[0];
-};
 
-// ── Total de Mesas ──
-exports.getTotalMesas = async () => {
-    const result = await pool.query('SELECT COUNT(*) as total FROM mesas');
-    return result.rows[0];
-};
+    const total =
+        await prisma.mesas.count({
 
-// ── Resumen Dashboard ──
-exports.getDashboardSummary = async () => {
-    const ventasHoy = await this.getVentasHoy();
-    const clientesHoy = await this.getClientesHoy();
-    const pedidosActivos = await this.getPedidosActivos();
-    const mesasOcupadas = await this.getMesasOcupadas();
-    const totalMesas = await this.getTotalMesas();
+        where: {
+            estado: 'ocupada'
+        }
+    });
 
     return {
-        ventasHoy: ventasHoy.total,
-        clientesHoy: clientesHoy.total,
-        pedidosActivos: pedidosActivos.total,
-        mesasOcupadas: mesasOcupadas.total,
-        totalMesas: totalMesas.total
+        total
+    };
+};
+
+// ── Total Mesas ──
+
+exports.getTotalMesas = async () => {
+
+    const total =
+        await prisma.mesas.count();
+
+    return {
+        total
+    };
+};
+
+// ── Dashboard Completo ──
+
+exports.getDashboardSummary =
+async () => {
+
+    const [
+        ventasHoy,
+        clientesHoy,
+        pedidosActivos,
+        mesasOcupadas,
+        totalMesas
+    ] = await Promise.all([
+
+        this.getVentasHoy(),
+
+        this.getClientesHoy(),
+
+        this.getPedidosActivos(),
+
+        this.getMesasOcupadas(),
+
+        this.getTotalMesas()
+    ]);
+
+    return {
+
+        ventasHoy:
+            ventasHoy.total,
+
+        clientesHoy:
+            clientesHoy.total,
+
+        pedidosActivos:
+            pedidosActivos.total,
+
+        mesasOcupadas:
+            mesasOcupadas.total,
+
+        totalMesas:
+            totalMesas.total
     };
 };

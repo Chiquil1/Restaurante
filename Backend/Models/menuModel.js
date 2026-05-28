@@ -1,52 +1,157 @@
-const pool = require('../config/Db');
+const prisma = require('../lib/prisma');
 
+// Obtener todo el menú
 exports.getAllMenu = async () => {
-    const result = await pool.query('SELECT * FROM menu ORDER BY categoria, nombre');
-    return result.rows;
+
+    return await prisma.menu.findMany({
+        orderBy: [
+            {
+                categoria: 'asc'
+            },
+
+            {
+                nombre: 'asc'
+            }
+        ]
+    });
 };
 
+// Obtener producto por ID
 exports.getMenuById = async (id) => {
-    const result = await pool.query('SELECT * FROM menu WHERE id = $1', [id]);
-    return result.rows[0];
+
+    return await prisma.menu.findUnique({
+        where: {
+            id: Number(id)
+        }
+    });
 };
 
-exports.createMenuItem = async (item) => {
-    const { nombre, descripcion, categoria, precio, ingredientes, tiempo_preparacion, disponible } = item;
-    const result = await pool.query(
-        `INSERT INTO menu (nombre, descripcion, categoria, precio, ingredientes, tiempo_preparacion, disponible)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [nombre, descripcion, categoria, precio, ingredientes, tiempo_preparacion, disponible !== undefined ? disponible : true]
-    );
-    return result.rows[0];
+// Crear producto
+exports.createMenuItem = async (
+    item
+) => {
+
+    const {
+        nombre,
+        descripcion,
+        categoria,
+        precio,
+        ingredientes,
+        tiempo_preparacion,
+        disponible
+    } = item;
+
+    return await prisma.menu.create({
+        data: {
+            nombre,
+            descripcion,
+            categoria,
+            precio,
+            ingredientes,
+            tiempo_preparacion,
+
+            disponible:
+                disponible !== undefined
+                    ? disponible
+                    : true
+        }
+    });
 };
 
-exports.updateMenuItem = async (id, item) => {
-    const { nombre, descripcion, categoria, precio, ingredientes, tiempo_preparacion, disponible } = item;
-    const result = await pool.query(
-        `UPDATE menu SET
-            nombre=$1, descripcion=$2, categoria=$3, precio=$4, ingredientes=$5, tiempo_preparacion=$6, disponible=$7
-        WHERE id=$8 RETURNING *`,
-        [nombre, descripcion, categoria, precio, ingredientes, tiempo_preparacion, disponible, id]
-    );
-    return result.rows[0];
+// Actualizar producto
+exports.updateMenuItem = async (
+    id,
+    item
+) => {
+
+    return await prisma.menu.update({
+        where: {
+            id: Number(id)
+        },
+
+        data: {
+            ...item
+        }
+    });
 };
 
-exports.deleteMenuItem = async (id) => {
-    await pool.query('DELETE FROM menu WHERE id = $1', [id]);
-    return { message: 'Producto eliminado' };
+// Eliminar producto
+exports.deleteMenuItem = async (
+    id
+) => {
+
+    await prisma.menu.delete({
+        where: {
+            id: Number(id)
+        }
+    });
+
+    return {
+        message: 'Producto eliminado'
+    };
 };
 
-exports.getMenuByCategory = async (categoria) => {
-    const result = await pool.query('SELECT * FROM menu WHERE categoria = $1 AND disponible = true ORDER BY nombre', [categoria]);
-    return result.rows;
+// Obtener menú por categoría
+exports.getMenuByCategory = async (
+    categoria
+) => {
+
+    return await prisma.menu.findMany({
+        where: {
+            categoria,
+            disponible: true
+        },
+
+        orderBy: {
+            nombre: 'asc'
+        }
+    });
 };
 
+// Obtener productos disponibles
 exports.getAvailableMenu = async () => {
-    const result = await pool.query('SELECT * FROM menu WHERE disponible = true ORDER BY categoria, nombre');
-    return result.rows;
+
+    return await prisma.menu.findMany({
+        where: {
+            disponible: true
+        },
+
+        orderBy: [
+            {
+                categoria: 'asc'
+            },
+
+            {
+                nombre: 'asc'
+            }
+        ]
+    });
 };
-// Agregar esto a menuModel.js
+
+// Obtener categorías
 exports.getCategories = async () => {
-    const result = await pool.query('SELECT DISTINCT categoria FROM menu WHERE categoria IS NOT NULL ORDER BY categoria');
-    return result.rows.map(row => row.categoria); // Retorna un array simple: ['Bebidas', 'Platos Fuertes', ...]
+
+    const categories =
+        await prisma.menu.findMany({
+
+        where: {
+            categoria: {
+                not: null
+            }
+        },
+
+        distinct: ['categoria'],
+
+        select: {
+            categoria: true
+        },
+
+        orderBy: {
+            categoria: 'asc'
+        }
+    });
+
+    return categories.map(
+        item => item.categoria
+    );
 };

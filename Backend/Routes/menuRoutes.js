@@ -1,15 +1,110 @@
 const express = require('express');
+
 const router = express.Router();
+
 const menuController = require('../Controller/menuController');
 
-router.get('/', menuController.getAllMenuItems);
+// Middlewares
+const authMiddleware = require('../middleware/auth');
+const roleMiddleware = require('../middleware/roleMiddleware');
+const rateLimiter = require('../middleware/rateLimiter');
 
-// CORRECCIÓN: Cambiar '/categorias' por '/categories' para coincidir con el frontend
-router.get('/categories', menuController.getCategories); 
+// ─────────────────────────────────────
+// RUTAS PÚBLICAS (POS / CLIENTE)
+// ─────────────────────────────────────
 
-router.get('/:id', menuController.getMenuItemById);
-router.post('/', menuController.createMenuItem);
-router.put('/:id', menuController.updateMenuItem);
-router.delete('/:id', menuController.deleteMenuItem);
+/**
+ * Obtener todo el menú
+ */
+router.get(
+    '/',
+    menuController.getAllMenuItems
+);
+
+/**
+ * Obtener menú disponible (solo items activos)
+ */
+router.get(
+    '/available',
+    menuController.getAvailableMenu
+);
+
+/**
+ * Obtener categorías del menú
+ */
+router.get(
+    '/categories',
+    menuController.getCategories
+);
+
+/**
+ * Obtener items por categoría
+ */
+router.get(
+    '/category/:category',
+    menuController.getMenuByCategory
+);
+
+// ─────────────────────────────────────
+// RUTA DETALLE
+// ─────────────────────────────────────
+
+/**
+ * Obtener item por ID
+ */
+router.get(
+    '/:id',
+    menuController.getMenuItemById
+);
+
+// ─────────────────────────────────────
+// CRUD ADMIN
+// ─────────────────────────────────────
+
+/**
+ * Crear item del menú
+ */
+router.post(
+    '/',
+    authMiddleware,
+    roleMiddleware(['admin', 'manager']),
+    rateLimiter,
+    menuController.createMenuItem
+);
+
+/**
+ * Actualizar item del menú
+ */
+router.patch(
+    '/:id',
+    authMiddleware,
+    roleMiddleware(['admin', 'manager']),
+    menuController.updateMenuItem
+);
+
+/**
+ * Eliminar item del menú
+ */
+router.delete(
+    '/:id',
+    authMiddleware,
+    roleMiddleware(['admin']),
+    menuController.deleteMenuItem
+);
+
+// ─────────────────────────────────────
+// CONTROL DE DISPONIBILIDAD
+// ─────────────────────────────────────
+
+/**
+ * Activar/desactivar item
+ */
+router.patch(
+    '/:id/toggle',
+    authMiddleware,
+    roleMiddleware(['admin', 'manager']),
+    menuController.toggleAvailability
+);
 
 module.exports = router;
+

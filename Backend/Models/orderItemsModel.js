@@ -1,53 +1,152 @@
-const pool = require('../config/Db');
+const prisma = require('../lib/prisma');
 
+// Obtener todos los items
 exports.getAllOrderItems = async () => {
-    const result = await pool.query(`
-        SELECT oi.*, o.mesa_id, m.nombre as menu_nombre 
-        FROM order_items oi 
-        LEFT JOIN orders o ON oi.order_id = o.id 
-        LEFT JOIN menu m ON oi.menu_item_id = m.id 
-        ORDER BY oi.fecha DESC
-    `);
-    return result.rows;
+    return await prisma.order_items.findMany({
+        include: {
+            orders: {
+                select: {
+                    mesa_id: true
+                }
+            },
+            menu: {
+                select: {
+                    nombre: true
+                }
+            }
+        },
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
 };
 
+// Obtener items por orden
+exports.getOrderItems = async (order_id) => {
+    return await prisma.order_items.findMany({
+        where: {
+            order_id: Number(order_id)
+        },
+        orderBy: {
+            id: 'asc'
+        }
+    });
+};
+
+// Obtener item por ID
 exports.getOrderItemsById = async (id) => {
-    const result = await pool.query('SELECT * FROM order_items WHERE id = $1', [id]);
-    return result.rows[0];
+    return await prisma.order_items.findUnique({
+        where: {
+            id: Number(id)
+        }
+    });
 };
 
+// Alias
+exports.getOrderItemById = exports.getOrderItemsById;
+
+// Obtener items por order
 exports.getOrderItemsByOrder = async (order_id) => {
-    const result = await pool.query('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [order_id]);
-    return result.rows;
+    return await prisma.order_items.findMany({
+        where: {
+            order_id: Number(order_id)
+        },
+        orderBy: {
+            id: 'asc'
+        }
+    });
 };
 
+// Crear item
 exports.createOrderItem = async (item) => {
-    const { order_id, menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado } = item;
-    const result = await pool.query(
-        `INSERT INTO order_items (order_id, menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [order_id, menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado || 'pendiente']
-    );
-    return result.rows[0];
+    const {
+        order_id,
+        menu_item_id,
+        nombre,
+        precio_unitario,
+        cantidad,
+        subtotal,
+        notas,
+        estado
+    } = item;
+
+    return await prisma.order_items.create({
+        data: {
+            order_id,
+            menu_item_id,
+            nombre,
+            precio_unitario,
+            cantidad,
+            subtotal,
+            notas,
+            estado: estado || 'pendiente'
+        }
+    });
 };
 
+// Actualizar item
 exports.updateOrderItem = async (id, item) => {
-    const { menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado } = item;
-    const result = await pool.query(
-        `UPDATE order_items SET
-            menu_item_id=$1, nombre=$2, precio_unitario=$3, cantidad=$4, subtotal=$5, notas=$6, estado=$7
-        WHERE id=$8 RETURNING *`,
-        [menu_item_id, nombre, precio_unitario, cantidad, subtotal, notas, estado, id]
-    );
-    return result.rows[0];
+    return await prisma.order_items.update({
+        where: {
+            id: Number(id)
+        },
+        data: {
+            ...item
+        }
+    });
 };
 
+// Eliminar item
 exports.deleteOrderItem = async (id) => {
-    await pool.query('DELETE FROM order_items WHERE id = $1', [id]);
-    return { message: 'Item eliminado' };
+    await prisma.order_items.delete({
+        where: {
+            id: Number(id)
+        }
+    });
+
+    return {
+        message: 'Item eliminado'
+    };
 };
 
+// Actualizar estado
 exports.updateOrderItemStatus = async (id, estado) => {
-    const result = await pool.query('UPDATE order_items SET estado = $1 WHERE id = $2 RETURNING *', [estado, id]);
-    return result.rows[0];
+    return await prisma.order_items.update({
+        where: {
+            id: Number(id)
+        },
+        data: {
+            estado
+        }
+    });
+};
+
+// Alias
+exports.updateItemStatus = exports.updateOrderItemStatus;
+
+// Actualizar cantidad
+exports.updateItemQuantity = async (id, cantidad) => {
+    return await prisma.order_items.update({
+        where: {
+            id: Number(id)
+        },
+        data: {
+            cantidad
+        }
+    });
+};
+
+// Calcular total orden
+exports.calcularTotalOrden = async (order_id) => {
+
+    const result = await prisma.order_items.aggregate({
+        where: {
+            order_id: Number(order_id)
+        },
+        _sum: {
+            subtotal: true
+        }
+    });
+
+    return result._sum.subtotal || 0;
 };
