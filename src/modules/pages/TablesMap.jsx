@@ -15,6 +15,7 @@ import {
 
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
+import { getErrorMessage } from "../../Services/Api";
 
 const API_URL = '/api/tables';
 
@@ -123,7 +124,7 @@ export default function TablesMap() {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || 'Error al guardar la mesa');
+      setError(getErrorMessage(err, 'Error al guardar la mesa'));
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -135,7 +136,7 @@ export default function TablesMap() {
         setSuccess('Mesa eliminada');
         fetchTables();
       } catch (err) {
-        setError('Error al eliminar');
+        setError(getErrorMessage(err, 'Error al eliminar'));
       }
     }
   };
@@ -165,6 +166,7 @@ export default function TablesMap() {
       case 'libre': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]';
       case 'ocupada': return 'bg-red-500/20 text-red-400 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.2)]';
       case 'reservada': return 'bg-amber-500/20 text-amber-400 border-amber-500/30 shadow-[0_0_15px_rgba(245,158,11,0.2)]';
+      case 'mantenimiento': return 'bg-slate-500/20 text-slate-300 border-slate-500/30 shadow-[0_0_15px_rgba(100,116,139,0.2)]';
       default: return 'bg-slate-500/20 text-slate-400 border-slate-500/30';
     }
   };
@@ -208,7 +210,7 @@ export default function TablesMap() {
         </GlassCard>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-8">
         <GlassCard className="p-4 flex flex-col justify-center items-center text-center border-white/10">
           <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Total Mesas</span>
           <span className="text-3xl font-black text-white">{tables.length}</span>
@@ -221,8 +223,16 @@ export default function TablesMap() {
           <span className="text-red-400 text-xs uppercase font-bold tracking-wider">Ocupadas</span>
           <span className="text-3xl font-black text-red-400">{tables.filter(t => t.estado === 'ocupada').length}</span>
         </GlassCard>
+        <GlassCard className="p-4 flex flex-col justify-center items-center text-center border-white/10 bg-amber-900/10">
+          <span className="text-amber-400 text-xs uppercase font-bold tracking-wider">Reservadas</span>
+          <span className="text-3xl font-black text-amber-400">{tables.filter(t => t.estado === 'reservada').length}</span>
+        </GlassCard>
+        <GlassCard className="p-4 flex flex-col justify-center items-center text-center border-white/10 bg-slate-800/30">
+          <span className="text-slate-300 text-xs uppercase font-bold tracking-wider">Mantenimiento</span>
+          <span className="text-3xl font-black text-slate-300">{tables.filter(t => t.estado === 'mantenimiento').length}</span>
+        </GlassCard>
         
-        <GlassCard className="p-4 flex items-center justify-between border-white/10">
+        <GlassCard className="p-4 flex items-center justify-between border-white/10 sm:col-span-2 xl:col-span-5">
            <label className="text-sm font-bold text-slate-300 uppercase tracking-wider">Filtrar:</label>
            <select
             value={filterStatus}
@@ -233,6 +243,7 @@ export default function TablesMap() {
             <option value="libre">Libres</option>
             <option value="ocupada">Ocupadas</option>
             <option value="reservada">Reservadas</option>
+            <option value="mantenimiento">Mantenimiento</option>
           </select>
         </GlassCard>
       </div>
@@ -284,6 +295,7 @@ export default function TablesMap() {
                   <option value="libre">Libre</option>
                   <option value="ocupada">Ocupada</option>
                   <option value="reservada">Reservada</option>
+                  <option value="mantenimiento">Mantenimiento</option>
                 </select>
               </div>
               <div>

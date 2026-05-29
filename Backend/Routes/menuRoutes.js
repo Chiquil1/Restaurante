@@ -81,6 +81,12 @@ router.patch(
     roleMiddleware(['admin', 'manager']),
     menuController.updateMenuItem
 );
+router.put(
+    '/:id',
+    authMiddleware,
+    roleMiddleware(['admin', 'manager']),
+    menuController.updateMenuItem
+);
 
 /**
  * Eliminar item del menú
@@ -107,4 +113,3 @@ router.patch(
 );
 
 module.exports = router;
-

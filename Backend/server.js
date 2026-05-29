@@ -110,7 +110,7 @@ const ordersRoutes = require('./Routes/ordersRoutes');
 app.use('/api/orders', ordersRoutes);
 
 // Items de Pedido
-const orderItemsRoutes = require('./Routes/orderItemsRoutes');
+const orderItemsRoutes = require('./Routes/orderitemsRoutes');
 app.use('/api/orderitems', orderItemsRoutes);
 
 // Mesas
@@ -214,4 +214,3 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 module.exports = app;
-

@@ -12,6 +12,7 @@ import {
 // Importación de componentes obligatorios
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
+import { unwrapArray, unwrapObject } from "../../Services/Api";
 
 const API = "/api";
 
@@ -73,12 +74,12 @@ function Dashboard() {
       const resStats = await fetch(`${API}/dashboard`);
       if (!resStats.ok) throw new Error("Error stats");
       const dataStats = await resStats.json();
-      setStats(dataStats);
+      setStats(unwrapObject(dataStats, stats));
 
       const resOrders = await fetch(`${API}/orders`);
       if (resOrders.ok) {
         const ordersResponse = await resOrders.json();
-        const ordersList = Array.isArray(ordersResponse) ? ordersResponse : ordersResponse.orders || [];
+        const ordersList = unwrapArray(ordersResponse);
         setUltimosPedidos(ordersList.slice(0, 5));
       }
     } catch (error) {

@@ -4,6 +4,7 @@ import {
   CheckCircleIcon, ExclamationTriangleIcon, EyeIcon, EyeSlashIcon,
   ArrowRightIcon, CreditCardIcon, ClockIcon, EnvelopeIcon, PhoneIcon, MapPinIcon
 } from "@heroicons/react/24/outline";
+import { unwrapObject } from "../../Services/Api";
 
 // --- COMPONENTES REUTILIZABLES (Estilo Glassmorphism) ---
 
@@ -136,14 +137,21 @@ export default function Settings() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const response = await fetch("/api/settings");
-        if (!response.ok) return;
-        const data = await response.json();
-        const { general, notificaciones, sucursal } = data;
+        const [generalResponse, branchResponse] = await Promise.all([
+          fetch("/api/settings/general"),
+          fetch("/api/settings/branch")
+        ]);
+
+        const general = generalResponse.ok
+          ? unwrapObject(await generalResponse.json())
+          : null;
+        const sucursal = branchResponse.ok
+          ? unwrapObject(await branchResponse.json())
+          : null;
 
         if (general) {
           setGeneralSettings({
-            nombreNegocio: general.nombreNegocio || "GustoSoft",
+            nombreNegocio: general.nombreNegocio || general.nombrenegocio || "GustoSoft",
             moneda: general.moneda || "MXN",
             horarioApertura: general.horario_apertura || "09:00",
             horarioCierre: general.horario_cierre || "23:00",
@@ -151,23 +159,14 @@ export default function Settings() {
             email: general.email || "",
           });
         }
-        if (notificaciones) {
-          setNotificationSettings({
-            alertasPreparacion: !!notificaciones.alertasPreparacion,
-            alertasStock: !!notificaciones.alertasStock,
-            alertasReservas: !!notificaciones.alertasReservas,
-            correoAdminOrden: !!notificaciones.correoAdmin,
-            avisoSonoro: !!notificaciones.avisoSonoro,
-          });
-        }
         if (sucursal) {
           setBranchSettings(prev => ({
             ...prev,
-            nombreSucursal: sucursal.nombreSucursal || "",
+            nombreSucursal: sucursal.nombreSucursal || sucursal.nombresucursal || "",
             direccion: sucursal.direccion || "",
             ciudad: sucursal.ciudad || "",
             estado: sucursal.estado || "",
-            codigoPostal: sucursal.codigoPostal || "",
+            codigoPostal: sucursal.codigoPostal || sucursal.codigopostal || "",
             telefono: sucursal.telefono || "",
           }));
         }
@@ -197,12 +196,7 @@ export default function Settings() {
   const handleSaveNotifications = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/settings/notifications", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(notificationSettings),
-      });
-      if (!response.ok) throw new Error();
+      localStorage.setItem("notification_settings", JSON.stringify(notificationSettings));
       showMessage("success", "Preferencias de notificación guardadas");
     } catch (err) {
       showMessage("error", "Error al actualizar notificaciones");
@@ -242,17 +236,8 @@ export default function Settings() {
     }
     setLoading(true);
     try {
-      const response = await fetch("/api/settings/password", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          passwordActual: securitySettings.passwordActual,
-          passwordNueva: securitySettings.passwordNueva,
-        }),
-      });
-      if (!response.ok) throw new Error();
       setSecuritySettings(prev => ({ ...prev, passwordActual: "", passwordNueva: "", passwordConfirmar: "" }));
-      showMessage("success", "Contraseña actualizada correctamente");
+      showMessage("success", "Cambio de contraseña pendiente de endpoint de autenticación");
     } catch (err) {
       showMessage("error", "Error al cambiar la contraseña");
     } finally { setLoading(false); }

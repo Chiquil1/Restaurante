@@ -41,7 +41,7 @@ const emitReservationEvent = (req, event, payload) => {
  * GET ALL
  */
 exports.getAllReservations = asyncHandler(async (req, res) => {
-    const reservations = await reservationsModel.getAllReservations();
+    const reservations = await reservationsModel.getAllReservations(req.query);
 
     res.json({
         success: true,
@@ -316,7 +316,7 @@ exports.updateReservationStatus = asyncHandler(async (req, res) => {
     }
 
     // Cliente llegó
-    if (estado === 'finalizada') {
+    if (estado === 'finalizada' || estado === 'ocupada') {
         for (const mesaId of mesas) {
             await tablesModel.updateTableStatus(
                 mesaId,
@@ -346,6 +346,21 @@ exports.updateReservationStatus = asyncHandler(async (req, res) => {
         message: `Estado actualizado a ${estado}`,
         data: updated
     });
+});
+
+exports.confirmReservation = asyncHandler(async (req, res, next) => {
+    req.body.estado = 'confirmada';
+    return exports.updateReservationStatus(req, res, next);
+});
+
+exports.markAsOccupied = asyncHandler(async (req, res, next) => {
+    req.body.estado = 'ocupada';
+    return exports.updateReservationStatus(req, res, next);
+});
+
+exports.cancelReservation = asyncHandler(async (req, res, next) => {
+    req.body.estado = 'cancelada';
+    return exports.updateReservationStatus(req, res, next);
 });
 
 /**

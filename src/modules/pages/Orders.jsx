@@ -14,6 +14,7 @@ import {
 // IMPORTACIONES OBLIGATORIAS
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
+import { getErrorMessage } from "../../Services/Api";
 
 const API_URL = '/api/orders';
 const MENU_URL = '/api/menu';
@@ -149,7 +150,7 @@ export default function OrdersPOS() {
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error("Error creando pedido:", err);
-      setError(err.response?.data?.error || err.message || "Error al crear el pedido. Revisa la consola.");
+      setError(getErrorMessage(err, "Error al crear el pedido. Revisa la consola."));
       setTimeout(() => setError(''), 5000);
     }
   };

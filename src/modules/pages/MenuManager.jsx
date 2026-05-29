@@ -12,6 +12,7 @@ import {
 // IMPORTACIONES OBLIGATORIAS SEGÚN REGLAS
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
+import { getErrorMessage } from "../../Services/Api";
 
 const API_URL = '/api/menu';
 
@@ -60,7 +61,7 @@ export default function MenuManager() {
       setItems(itemsData);
     } catch (err) {
       console.error("Error detallado fetching menu:", err);
-      const msg = err.response?.data?.error || err.message || 'Error al cargar el menú';
+      const msg = getErrorMessage(err, 'Error al cargar el menú');
       setError(`Error ${err.response?.status || 500}: ${msg}`);
     } finally {
       setLoading(false);
@@ -111,7 +112,7 @@ export default function MenuManager() {
       
     } catch (err) {
       console.error("Error al guardar:", err);
-      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Error desconocido al guardar';
+      const errorMsg = getErrorMessage(err, 'Error desconocido al guardar');
       setError(`Fallo al guardar: ${errorMsg}`);
     }
   };
@@ -124,7 +125,7 @@ export default function MenuManager() {
         fetchMenuItems();
         setTimeout(() => setSuccess(''), 3000);
       } catch (err) {
-        setError(err.response?.data?.error || 'Error al eliminar');
+        setError(getErrorMessage(err, 'Error al eliminar'));
         setTimeout(() => setError(''), 3000);
       }
     }

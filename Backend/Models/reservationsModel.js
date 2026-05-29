@@ -1,5 +1,16 @@
 const prisma = require('../lib/prisma');
 
+const normalizeTime = (time) => {
+    if (!time) return undefined;
+    if (time instanceof Date) return time;
+
+    const value = String(time);
+    if (value.includes('T')) return new Date(value);
+
+    const [hours = '00', minutes = '00', seconds = '00'] = value.split(':');
+    return new Date(`1970-01-01T${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:${seconds.padStart(2, '0')}.000Z`);
+};
+
 // Obtener todas las reservaciones
 exports.getAllReservations = async (filters = {}) => {
 
@@ -70,7 +81,7 @@ exports.checkConflict = async (
     return await prisma.reservations.findFirst({
         where: {
             fecha: new Date(fecha),
-            hora,
+            hora: normalizeTime(hora),
             nombre_cliente: nombreCliente,
 
             NOT: {
@@ -103,7 +114,7 @@ exports.createReservation = async (
             telefono_cliente,
             email,
             fecha: new Date(fecha),
-            hora,
+            hora: normalizeTime(hora),
             numero_personas,
             mesas_asignadas: mesas_asignadas || '[]',
             notas: notas || '',
@@ -128,6 +139,10 @@ exports.updateReservation = async (
 
             ...(updates.fecha && {
                 fecha: new Date(updates.fecha)
+            }),
+
+            ...(updates.hora && {
+                hora: normalizeTime(updates.hora)
             })
         }
     });

@@ -23,6 +23,26 @@ exports.getCategories = async (req, res) => {
     }
 };
 
+exports.getAvailableMenu = async (req, res) => {
+    try {
+        const items = await menuModel.getAvailableMenu();
+        res.json(items);
+    } catch (error) {
+        console.error("Error en getAvailableMenu:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.getMenuByCategory = async (req, res) => {
+    try {
+        const items = await menuModel.getMenuByCategory(req.params.category);
+        res.json(items);
+    } catch (error) {
+        console.error("Error en getMenuByCategory:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
 exports.getMenuItemById = async (req, res) => {
     try {
         // Verifica que en el modelo tengas getMenuItemById o usa getMenuById
@@ -52,6 +72,22 @@ exports.updateMenuItem = async (req, res) => {
         res.json(item);
     } catch (error) {
         console.error("Error en updateMenuItem:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+exports.toggleAvailability = async (req, res) => {
+    try {
+        const item = await menuModel.getMenuById(req.params.id);
+        if (!item) return res.status(404).json({ error: 'Plato no encontrado' });
+
+        const updated = await menuModel.updateMenuItem(req.params.id, {
+            disponible: !item.disponible
+        });
+
+        res.json(updated);
+    } catch (error) {
+        console.error("Error en toggleAvailability:", error);
         res.status(500).json({ error: error.message });
     }
 };

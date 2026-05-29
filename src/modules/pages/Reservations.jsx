@@ -17,13 +17,49 @@ import {
 
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
+import { getErrorMessage, unwrapArray } from "../../Services/Api";
 
-const API_URL = 'http://localhost:3000/api/reservations';
-const TABLES_API = 'http://localhost:3000/api/tables';
+const API_URL = '/api/reservations';
+const TABLES_API = '/api/tables';
 
 const inputClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-slate-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all";
 const labelClass = "block text-sm font-bold text-slate-300 mb-1.5 ml-1";
 const selectClass = "w-full bg-slate-900/50 border border-white/10 rounded-2xl px-4 py-3 text-white focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 outline-none transition-all cursor-pointer";
+
+const toInputDate = (value) => {
+  if (!value) return new Date().toISOString().slice(0, 10);
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString().slice(0, 10) : date.toISOString().slice(0, 10);
+};
+
+const toInputTime = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string' && /^\d{2}:\d{2}/.test(value)) return value.slice(0, 5);
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+};
+
+const parseAssignedTables = (mesas) => {
+  if (!mesas) return [];
+
+  try {
+    const parsed = typeof mesas === 'string' ? JSON.parse(mesas) : mesas;
+    return Array.isArray(parsed) ? parsed.map(Number).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+};
+
+const normalizeReservation = (reservation) => ({
+  ...reservation,
+  fecha: toInputDate(reservation.fecha),
+  hora: toInputTime(reservation.hora),
+  mesas_asignadas: parseAssignedTables(reservation.mesas_asignadas)
+});
 
 export default function ReservationsManager() {
   const [reservations, setReservations] = useState([]);
@@ -88,11 +124,11 @@ export default function ReservationsManager() {
         axios.get(TABLES_API)
       ]);
       
-      setReservations(resRes.data);
-      setTables(tablesRes.data);
+      setReservations(unwrapArray(resRes.data).map(normalizeReservation));
+      setTables(unwrapArray(tablesRes.data));
     } catch (err) {
       console.error("Error cargando datos:", err);
-      setError('Error al cargar los datos');
+      setError(getErrorMessage(err, 'Error al cargar los datos'));
       setTimeout(() => setError(''), 3000);
     } finally {
       setLoading(false);
@@ -102,8 +138,7 @@ export default function ReservationsManager() {
   const cargarMesas = async () => {
     try {
       const response = await axios.get(TABLES_API);
-      const tablesData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
-      setTables(tablesData);
+      setTables(unwrapArray(response.data));
     } catch (err) {
       console.error("Error cargando mesas:", err);
     }
@@ -112,8 +147,7 @@ export default function ReservationsManager() {
   const actualizarEstadoMesas = async () => {
     try {
       const response = await axios.get(TABLES_API);
-      const tablesData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
-      setTables(tablesData);
+      setTables(unwrapArray(response.data));
     } catch (err) {
       console.error("Error actualizando estado mesas:", err);
       // Si hay error, recargar normalmente
@@ -129,7 +163,7 @@ export default function ReservationsManager() {
       const payload = {
         ...formData,
         numero_personas: Number(formData.numero_personas),
-        mesas_asignadas: JSON.stringify(formData.mesas_asignadas)
+        mesas_asignadas: JSON.stringify(formData.mesas_asignadas.map(Number))
       };
 
       if (editingId) {
@@ -145,7 +179,7 @@ export default function ReservationsManager() {
       await cargarDatos();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Error al guardar');
+      setError(getErrorMessage(err, 'Error al guardar'));
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -159,20 +193,13 @@ export default function ReservationsManager() {
       await cargarDatos();
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      setError('Error al cancelar');
+      setError(getErrorMessage(err, 'Error al cancelar'));
       setTimeout(() => setError(''), 3000);
     }
   };
 
   const handleEdit = (res) => {
-    let mesasArray = [];
-    try {
-      mesasArray = typeof res.mesas_asignadas === 'string' 
-        ? JSON.parse(res.mesas_asignadas) 
-        : res.mesas_asignadas;
-    } catch (e) { mesasArray = []; }
-
-    setFormData({ ...res, mesas_asignadas: mesasArray });
+    setFormData(normalizeReservation(res));
     setEditingId(res.id);
     setShowForm(true);
   };
@@ -180,7 +207,11 @@ export default function ReservationsManager() {
   const handleCloseForm = () => {
     setShowForm(false);
     setEditingId(null);
-    setFormData(initialFormState);
+    setFormData({
+      ...initialFormState,
+      fecha: new Date().toISOString().split('T')[0],
+      mesas_asignadas: []
+    });
   };
 
   const handleInputChange = (e) => {
@@ -231,14 +262,6 @@ export default function ReservationsManager() {
       .filter(t => mesasIds.includes(t.id))
       .map(t => `#${t.numero}`)
       .join(', ');
-  };
-
-  const parseMesas = (mesas) => {
-    try {
-      return typeof mesas === 'string' ? JSON.parse(mesas) : mesas || [];
-    } catch (e) {
-      return [];
-    }
   };
 
   return (
@@ -572,7 +595,7 @@ export default function ReservationsManager() {
             </GlassCard>
           ) : (
             reservations.map((res) => {
-              const mesasIds = parseMesas(res.mesas_asignadas);
+              const mesasIds = parseAssignedTables(res.mesas_asignadas);
               const mesasNombres = getTableNombres(mesasIds);
 
               return (

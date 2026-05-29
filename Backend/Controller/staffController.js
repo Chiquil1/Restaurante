@@ -1,4 +1,4 @@
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 
 const staffModel = require('../Models/staffModel');
 
@@ -394,4 +394,3 @@ exports.createAusencia = asyncHandler(async (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
-

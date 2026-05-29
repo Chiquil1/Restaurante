@@ -22,15 +22,6 @@ exports.getPaymentsBySale = asyncHandler(async (req, res) => {
         where: {
             venta_id: ventaId
         },
-        include: {
-            usuario: {
-                select: {
-                    id: true,
-                    nombre: true,
-                    apellido: true
-                }
-            }
-        },
         orderBy: {
             fecha: 'asc'
         }
@@ -62,16 +53,6 @@ exports.getPaymentById = asyncHandler(async (req, res) => {
     const payment = await prisma.pagos.findUnique({
         where: {
             id: paymentId
-        },
-        include: {
-            venta: true,
-            usuario: {
-                select: {
-                    id: true,
-                    nombre: true,
-                    apellido: true
-                }
-            }
         }
     });
 
@@ -127,9 +108,6 @@ exports.createPayment = asyncHandler(async (req, res) => {
         const venta = await tx.ventas.findUnique({
             where: {
                 id: validatedVentaId
-            },
-            include: {
-                pagos: true
             }
         });
 
@@ -169,10 +147,6 @@ exports.createPayment = asyncHandler(async (req, res) => {
                 id: validatedVentaId
             },
             data: {
-                saldo_pendiente: saldoPendiente <= 0
-                    ? 0
-                    : saldoPendiente,
-
                 estado: saldoPendiente <= 0
                     ? 'pagado'
                     : 'pendiente'
@@ -220,9 +194,6 @@ exports.getSaleBalance = asyncHandler(async (req, res) => {
     const venta = await prisma.ventas.findUnique({
         where: {
             id: ventaId
-        },
-        include: {
-            pagos: true
         }
     });
 
@@ -230,7 +201,16 @@ exports.getSaleBalance = asyncHandler(async (req, res) => {
         throw new ApiError('Venta no encontrada', 404);
     }
 
-    const totalPagado = venta.pagos.reduce(
+    const pagos = await prisma.pagos.findMany({
+        where: {
+            venta_id: ventaId
+        },
+        orderBy: {
+            fecha: 'asc'
+        }
+    });
+
+    const totalPagado = pagos.reduce(
         (acc, pago) => acc + Number(pago.monto),
         0
     );
@@ -248,7 +228,7 @@ exports.getSaleBalance = asyncHandler(async (req, res) => {
         estado: saldoPendiente <= 0
             ? 'pagado'
             : 'pendiente',
-        pagos: venta.pagos
+        pagos
     };
 
     logger.info('Balance obtenido', {

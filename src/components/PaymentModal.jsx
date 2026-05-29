@@ -22,7 +22,7 @@ export default function PaymentModal({ sale, onClose, onPaymentSuccess }) {
   const loadHistory = async () => {
     try {
       const data = await PaymentService.getDetails(sale.id);
-      setHistory(data.payments || []);
+      setHistory(data.pagos || data.payments || []);
     } catch (error) {
       console.error("Error cargando historial", error);
     }

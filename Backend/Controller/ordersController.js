@@ -4,6 +4,85 @@ const logger = require('../middleware/logger');
 const { ApiError, asyncHandler } = require('../middleware/errorHandler');
 const { validators } = require('../middleware/validators');
 
+const buildOrderCreateData = ({
+    mesa_id,
+    mesero_id,
+    total,
+    estado,
+    prioridad
+}) => ({
+    total: total || 0,
+    estado: estado || 'abierto',
+    prioridad: prioridad || 'normal',
+    ...(mesa_id && {
+        mesas: {
+            connect: {
+                id: Number(mesa_id)
+            }
+        }
+    }),
+    ...(mesero_id && {
+        personal: {
+            connect: {
+                id: Number(mesero_id)
+            }
+        }
+    })
+});
+
+const buildOrderUpdateData = ({
+    estado,
+    total,
+    mesa_id,
+    mesero_id
+}) => ({
+    ...(estado && { estado }),
+    ...(total !== undefined && { total }),
+    ...(mesa_id !== undefined && {
+        mesas: mesa_id
+            ? {
+                connect: {
+                    id: Number(mesa_id)
+                }
+            }
+            : {
+                disconnect: true
+            }
+    }),
+    ...(mesero_id !== undefined && {
+        personal: mesero_id
+            ? {
+                connect: {
+                    id: Number(mesero_id)
+                }
+            }
+            : {
+                disconnect: true
+            }
+    })
+});
+
+const buildOrderItemCreateData = (item, orderId) => ({
+    nombre: item.nombre,
+    precio_unitario: Number(item.precio_unitario),
+    cantidad: Number(item.cantidad),
+    subtotal: Number(item.precio_unitario) * Number(item.cantidad),
+    notas: item.notas || null,
+    estado: item.estado || 'pendiente',
+    orders: {
+        connect: {
+            id: Number(orderId)
+        }
+    },
+    ...(item.menu_item_id && {
+        menu: {
+            connect: {
+                id: Number(item.menu_item_id)
+            }
+        }
+    })
+});
+
 /**
  * GET /api/orders
  * Obtener todas las órdenes
@@ -82,6 +161,81 @@ exports.getOrderById = asyncHandler(async (req, res) => {
     });
 });
 
+exports.getActiveOrders = asyncHandler(async (req, res) => {
+    const orders = await prisma.orders.findMany({
+        where: {
+            estado: {
+                in: ['abierto', 'pendiente', 'preparando', 'listo']
+            }
+        },
+        include: {
+            mesas: true,
+            personal: true,
+            order_items: true
+        },
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
+
+    res.json({
+        success: true,
+        data: orders,
+        count: orders.length,
+        timestamp: new Date().toISOString()
+    });
+});
+
+exports.getOrdersByTable = asyncHandler(async (req, res) => {
+    const tableId = validators.validateId(req.params.tableId, 'ID de mesa');
+    const orders = await prisma.orders.findMany({
+        where: {
+            mesa_id: tableId
+        },
+        include: {
+            mesas: true,
+            personal: true,
+            order_items: true
+        },
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
+
+    res.json({
+        success: true,
+        data: orders,
+        count: orders.length,
+        timestamp: new Date().toISOString()
+    });
+});
+
+exports.getOrdersByStatus = asyncHandler(async (req, res) => {
+    const { status } = req.params;
+    validators.validateOrderStatus(status);
+
+    const orders = await prisma.orders.findMany({
+        where: {
+            estado: status
+        },
+        include: {
+            mesas: true,
+            personal: true,
+            order_items: true
+        },
+        orderBy: {
+            fecha: 'desc'
+        }
+    });
+
+    res.json({
+        success: true,
+        data: orders,
+        count: orders.length,
+        timestamp: new Date().toISOString()
+    });
+});
+
 /**
  * POST /api/orders
  * Crear nueva orden
@@ -141,13 +295,12 @@ exports.createOrder = asyncHandler(async (req, res) => {
     // ─────────────────────────────
 
     const order = await prisma.orders.create({
-        data: {
-            mesa_id: mesa_id || null,
-            mesero_id: mesero_id || null,
-            total: total || 0,
-            estado: estado || 'abierto',
-            cliente: cliente || null
-        },
+        data: buildOrderCreateData({
+            mesa_id,
+            mesero_id,
+            total,
+            estado
+        }),
         include: {
             mesas: true,
             personal: true
@@ -238,12 +391,12 @@ exports.updateOrder = asyncHandler(async (req, res) => {
         where: {
             id: orderId
         },
-        data: {
-            estado: estado || existingOrder.estado,
-            total: total ?? existingOrder.total,
-            mesa_id: mesa_id ?? existingOrder.mesa_id,
-            mesero_id: mesero_id ?? existingOrder.mesero_id
-        },
+        data: buildOrderUpdateData({
+            estado,
+            total,
+            mesa_id,
+            mesero_id
+        }),
         include: {
             mesas: true,
             personal: true,
@@ -294,6 +447,21 @@ exports.updateOrder = asyncHandler(async (req, res) => {
         data: updatedOrder,
         timestamp: new Date().toISOString()
     });
+});
+
+exports.updateOrderStatus = asyncHandler(async (req, res, next) => {
+    req.body.estado = req.body.estado || req.body.status;
+    return exports.updateOrder(req, res, next);
+});
+
+exports.markAsPaid = asyncHandler(async (req, res, next) => {
+    req.body.estado = 'pagado';
+    return exports.updateOrder(req, res, next);
+});
+
+exports.cancelOrder = asyncHandler(async (req, res, next) => {
+    req.body.estado = 'cancelado';
+    return exports.updateOrder(req, res, next);
 });
 
 /**
@@ -406,13 +574,7 @@ exports.createOrderWithItems = asyncHandler(async (req, res) => {
         // ─────────────────────────────
 
         const newOrder = await tx.orders.create({
-            data: {
-                mesa_id: order.mesa_id || null,
-                mesero_id: order.mesero_id || null,
-                total: order.total || 0,
-                estado: order.estado || 'abierto',
-                cliente: order.cliente || null
-            }
+            data: buildOrderCreateData(order)
         });
 
         // ─────────────────────────────
@@ -431,21 +593,7 @@ exports.createOrderWithItems = asyncHandler(async (req, res) => {
 
             const createdItem =
                 await tx.order_items.create({
-                    data: {
-                        order_id: newOrder.id,
-                        menu_item_id:
-                            item.menu_item_id || null,
-                        nombre: item.nombre,
-                        precio_unitario:
-                            item.precio_unitario,
-                        cantidad: item.cantidad,
-                        subtotal:
-                            item.precio_unitario *
-                            item.cantidad,
-                        notas: item.notas || null,
-                        estado:
-                            item.estado || 'pendiente'
-                    }
+                    data: buildOrderItemCreateData(item, newOrder.id)
                 });
 
             createdItems.push(createdItem);

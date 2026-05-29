@@ -5,6 +5,7 @@ import {
   FireIcon,
   BeakerIcon,
 } from "@heroicons/react/24/outline";
+import { unwrapArray } from "../../Services/Api";
 
 const API_BASE = "/api";
 
@@ -24,7 +25,7 @@ function KitchenView() {
       const res = await fetch(`${API_BASE}/orders`);
       const data = await res.json();
 
-      const list = Array.isArray(data) ? data : [];
+      const list = unwrapArray(data);
 
       const filtered = list.filter((o) =>
         ["pendiente", "cocinando"].includes(o.status || o.estado)
@@ -32,14 +33,14 @@ function KitchenView() {
 
       const mapped = filtered.map((o) => ({
         id: o.id,
-        mesa: o.table_id || o.mesa || "N/A",
+        mesa: o.mesas?.numero || o.table_id || o.mesa_id || o.mesa || "N/A",
         status: o.status || o.estado,
         prioridad: o.priority || o.prioridad || "normal",
-        created_at: o.created_at,
-        tiempo: calculateTime(o.created_at),
+        created_at: o.created_at || o.fecha,
+        tiempo: calculateTime(o.created_at || o.fecha),
 
         // 🔥 FIX CLAVE: soporta backend sin items
-        items: Array.isArray(o.items) ? o.items : [],
+        items: Array.isArray(o.items) ? o.items : (Array.isArray(o.order_items) ? o.order_items : []),
       }));
 
       setOrders(mapped);

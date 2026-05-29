@@ -56,6 +56,16 @@ exports.getTablesByNumbers = async (numeros) => {
     });
 };
 
+exports.getTablesByIds = async (ids) => {
+    return await prisma.mesas.findMany({
+        where: {
+            id: {
+                in: ids.map(Number)
+            }
+        }
+    });
+};
+
 // Crear mesa
 exports.createTable = async (tableData) => {
     const {

@@ -107,14 +107,24 @@ exports.createOrderItem = asyncHandler(async (req, res) => {
         // Crear item
         const item = await tx.order_items.create({
             data: {
-                order_id: validatedOrderId,
-                menu_item_id: menu_item_id || null,
                 nombre,
                 precio_unitario: Number(precio_unitario),
                 cantidad: Number(cantidad),
                 subtotal,
                 notas: notas || null,
-                estado: estado || 'pendiente'
+                estado: estado || 'pendiente',
+                orders: {
+                    connect: {
+                        id: validatedOrderId
+                    }
+                },
+                ...(menu_item_id && {
+                    menu: {
+                        connect: {
+                            id: Number(menu_item_id)
+                        }
+                    }
+                })
             }
         });
 
@@ -172,7 +182,7 @@ exports.createOrderItem = asyncHandler(async (req, res) => {
 exports.updateItemStatus = asyncHandler(async (req, res) => {
     const itemId = validators.validateId(req.params.id, 'ID del item');
 
-    const { estado } = req.body;
+    const estado = req.body.estado || req.body.status;
 
     if (!estado) {
         throw new ApiError('Estado requerido', 400);
@@ -290,6 +300,16 @@ exports.updateItemQuantity = asyncHandler(async (req, res) => {
         data: result,
         timestamp: new Date().toISOString()
     });
+});
+
+exports.markItemReady = asyncHandler(async (req, res, next) => {
+    req.body.estado = 'listo';
+    return exports.updateItemStatus(req, res, next);
+});
+
+exports.markItemDelivered = asyncHandler(async (req, res, next) => {
+    req.body.estado = 'entregado';
+    return exports.updateItemStatus(req, res, next);
 });
 
 /**

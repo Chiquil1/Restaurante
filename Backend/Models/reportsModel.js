@@ -77,7 +77,9 @@ exports.getTopProducts = async (
     const productsWithNames =
         await Promise.all(
 
-        products.map(async item => {
+        products
+            .filter(item => item.menu_item_id)
+            .map(async item => {
 
             const menu =
                 await prisma.menu.findUnique({
@@ -87,12 +89,19 @@ exports.getTopProducts = async (
                 });
 
             return {
+                id: menu?.id || item.menu_item_id,
                 nombre:
                     menu?.nombre || 'Producto',
+                categoria:
+                    menu?.categoria || 'General',
 
+                cantidad_vendida:
+                    item._sum.cantidad || 0,
                 total_vendido:
                     item._sum.cantidad || 0,
 
+                subtotal:
+                    item._sum.subtotal || 0,
                 total_ingresos:
                     item._sum.subtotal || 0
             };
@@ -201,4 +210,29 @@ exports.getReservationsReport = async (
         estado: item.estado,
         cantidad: item._count.id
     }));
+};
+
+exports.getOccupancyReport = exports.getTableReport;
+
+exports.getMenuPopularityReport = async (fecha_inicio, fecha_fin) => {
+    return exports.getTopProducts(fecha_inicio, fecha_fin, 50);
+};
+
+exports.getStaffPerformanceReport = exports.getWaiterReport;
+
+exports.getDashboardSummary = async () => {
+    const [salesTotal, activeOrders, occupiedTables, totalTables] = await Promise.all([
+        prisma.ventas.aggregate({ _sum: { total: true }, _count: { id: true } }),
+        prisma.orders.count({ where: { estado: { in: ['abierto', 'pendiente', 'preparando', 'listo'] } } }),
+        prisma.mesas.count({ where: { estado: 'ocupada' } }),
+        prisma.mesas.count()
+    ]);
+
+    return {
+        ventas_totales: Number(salesTotal._sum.total || 0),
+        ventas_count: salesTotal._count.id || 0,
+        pedidos_activos: activeOrders,
+        mesas_ocupadas: occupiedTables,
+        total_mesas: totalTables
+    };
 };

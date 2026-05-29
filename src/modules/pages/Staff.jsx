@@ -7,8 +7,9 @@ import {
 import GlassCard from "../../components/GlassCard";
 import GlassButton from "../../components/GlassButton";
 import axios from "axios";
+import { unwrapArray } from "../../Services/Api";
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 function Staff() {
   const [employees, setEmployees] = useState([]);
@@ -37,22 +38,29 @@ function Staff() {
   const loadStaff = async () => {
     try {
       const response = await axios.get(`${API_URL}/staff`);
-      setEmployees(response.data);
+      setEmployees(unwrapArray(response.data));
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
   const loadSchedule = async () => {
     try {
       const response = await axios.get(`${API_URL}/staff/schedule`, { params: { month: currentMonth, year: currentYear } });
-      setScheduleData(response.data);
-    } catch (err) { console.error("Error cargando horario", err); }
+      setScheduleData(unwrapArray(response.data));
+    } catch (err) {
+      console.warn("Horario no disponible en el backend; se muestra vacío.");
+      setScheduleData([]);
+    }
   };
 
   const loadAbsences = async (id) => {
     try {
-      const response = await axios.get(`${API_URL}/staff/${id}/ausencias`);
-      setAbsences(response.data);
-    } catch (err) { console.error(err); }
+      const response = await axios.get(`${API_URL}/staff/ausencias`);
+      const allAbsences = unwrapArray(response.data);
+      setAbsences(allAbsences.filter((absence) => !absence.personal_id || absence.personal_id === id));
+    } catch (err) {
+      console.warn("Ausencias no disponibles", err);
+      setAbsences([]);
+    }
   };
 
   const handleEmployeeClick = (emp) => {
@@ -89,7 +97,7 @@ function Staff() {
       setEditingCell(null);
       loadSchedule();
     } catch (err) {
-      alert("Error al actualizar turno");
+      alert("El endpoint de turnos aún no está disponible en el backend");
     }
   };
 

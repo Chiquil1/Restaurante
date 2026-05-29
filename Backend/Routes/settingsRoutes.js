@@ -4,6 +4,8 @@ const settingsController = require('../Controller/settingsController');
 
 router.get('/general', settingsController.getGeneral);
 router.put('/general', settingsController.updateGeneral);
+router.get('/branch', settingsController.getBranch);
+router.put('/branch', settingsController.updateBranch);
 router.get('/sucursal', settingsController.getBranch);
 router.put('/sucursal', settingsController.updateBranch);
 router.post('/backup', settingsController.createBackup);

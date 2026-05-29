@@ -32,6 +32,26 @@ const validators = {
     }
   },
 
+  validateSaleStatus: (status) => {
+    const validStatuses = ['pendiente', 'pagado', 'completada', 'cancelada', 'reembolsada'];
+    if (!validStatuses.includes(status)) {
+      throw new ApiError(
+        `Estado de venta inválido. Valores válidos: ${validStatuses.join(', ')}`,
+        400
+      );
+    }
+  },
+
+  validateReservationStatus: (status) => {
+    const validStatuses = ['pendiente', 'confirmada', 'ocupada', 'cancelada', 'completada', 'finalizada'];
+    if (!validStatuses.includes(status)) {
+      throw new ApiError(
+        `Estado de reservación inválido. Valores válidos: ${validStatuses.join(', ')}`,
+        400
+      );
+    }
+  },
+
   // Validar estado de mesa
   validateTableStatus: (status) => {
     const validStatuses = ['libre', 'ocupada', 'reservada', 'mantenimiento'];

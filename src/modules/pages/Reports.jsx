@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import { getErrorMessage, unwrapArray } from "../../Services/Api";
 
 // Importamos los componentes base definidos en tu guía
 import { GlassCard, GlassButton } from "@/components";
@@ -41,16 +42,16 @@ function Reports() {
     try {
       // LLAMADA AL BACKEND: Coincide con getMenuPopularityReport
       const response = await fetch(
-        `/api/reports/menu-popularity?startDate=${startDate}&endDate=${endDate}`
+        `/api/reports/menu-popularity?dateFrom=${startDate}&dateTo=${endDate}`
       );
 
       const payload = await response.json().catch(() => []);
 
       if (!response.ok) {
-        throw new Error(payload.error || "Error al obtener reporte");
+        throw new Error(getErrorMessage({ response: { data: payload } }, "Error al obtener reporte"));
       }
 
-      const data = Array.isArray(payload) ? payload : [];
+      const data = unwrapArray(payload);
       setAllData(data);
     } catch (err) {
       console.error("Error:", err);
@@ -110,10 +111,10 @@ function Reports() {
     try {
       // LLAMADA AL BACKEND: Coincide con getMenuItemDetails
       const response = await fetch(
-        `/api/reports/item-details?name=${encodeURIComponent(item.nombre)}&startDate=${startDate}&endDate=${endDate}`
+        `/api/reports/item-details?name=${encodeURIComponent(item.nombre)}&dateFrom=${startDate}&dateTo=${endDate}`
       );
       const payload = await response.json().catch(() => []);
-      setDetailRows(Array.isArray(payload) ? payload : []);
+      setDetailRows(unwrapArray(payload));
     } catch (_err) {
       console.error("Error loading item details:", _err);
       setDetailRows([]);

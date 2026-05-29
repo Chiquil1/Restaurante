@@ -57,11 +57,21 @@ router.patch(
     authMiddleware,
     orderItemsController.updateItemQuantity
 );
+router.put(
+    '/:id/quantity',
+    authMiddleware,
+    orderItemsController.updateItemQuantity
+);
 
 /**
  * Actualizar estado
  */
 router.patch(
+    '/:id/status',
+    authMiddleware,
+    orderItemsController.updateItemStatus
+);
+router.put(
     '/:id/status',
     authMiddleware,
     orderItemsController.updateItemStatus
@@ -97,4 +107,3 @@ router.delete(
 );
 
 module.exports = router;
-
